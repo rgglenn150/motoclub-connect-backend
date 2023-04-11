@@ -7,6 +7,7 @@ const {
 const router = express.Router();
 const User = require('../models/UserModel')
 
+
 router.get('/', getUser);
 router.post('/', createUser);
 

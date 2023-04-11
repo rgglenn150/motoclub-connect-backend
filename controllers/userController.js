@@ -2,7 +2,7 @@ const User = require('../models/UserModel')
 
 //get users
 
-//register user
+//register user DO NOT USE  registration on auth controller
 const createUser = async (req, res) => {
   const {
     firstName,

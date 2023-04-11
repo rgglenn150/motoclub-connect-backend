@@ -12,13 +12,25 @@ const userSchema = new Schema({
   password: {
     type: String,
     required: true
-  }
+  },
+  username:{
+    type:String,
+    required:true,
+    unique:true
+  },
+  firstName:{
+    type:String
+  },
+  lastName:{
+    type:String
+  },
+
 }, {
   timestamps: true
 })
 
 // Static signup method
-userSchema.statics.signup = async function (email, password) {
+userSchema.statics.signup = async function (email, password,username,firstName,lastName) {
 
   //validation
 
@@ -49,7 +61,10 @@ userSchema.statics.signup = async function (email, password) {
 
   const user = await this.create({
     email,
-    password: hash
+    password: hash,
+    username,
+    firstName,
+    lastName
   })
 
   return user;
