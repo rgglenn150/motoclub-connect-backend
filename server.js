@@ -1,5 +1,6 @@
 require('dotenv').config();
 const express = require('express');
+const session = require('express-session');
 const mongoose = require('mongoose');
 const userRoutes = require('./routes/user');
 const authRoutes = require('./routes/auth')
@@ -23,7 +24,14 @@ app.use((req, res, next) => {
   console.log(req.path, req.method);
   next();
 
-})
+});
+
+// Configure session middleware
+app.use(session({
+  secret: 'mysecretkey',
+  resave: false,
+  saveUninitialized: true
+}));
 
 //routes
 app.use('/api/user', userRoutes);
@@ -39,7 +47,7 @@ mongoose.connect(process.env.MONGO_LOCAL_URI).then(() => {
   })
 
 }).catch(err => {
-  console.log(err)
+  console.log('Error:',err)
 })
 
 
