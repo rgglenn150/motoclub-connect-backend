@@ -41,10 +41,11 @@ const loginUser = async (req, res) => {
 
   // If the email and password are correct, store the user ID in the session
   req.session.userId = user._id;
-
+  const token = createToken(user._id);
   // Return a success response
   res.status(200).json({
-    message: 'Logged in successfully'
+    message: 'Logged in successfully',
+    token
   });
 }
 
@@ -75,7 +76,7 @@ const signupUser = async (req, res) => {
   try {
     const user = await User.signup(email, password, username, firstName, lastName)
 
-    const token = createToken(user._id)
+    const token = createToken(user._id);
     res.status(200).send({
       email,
       token
