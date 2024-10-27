@@ -2,17 +2,14 @@ const User = require('../models/UserModel')
 
 //get users
 
-//register user DO NOT USE  registration on auth controller
-const createUser = async (req, res) => {
+//register user DO NOT USE.  
+/* const createUser = async (req, res) => {
   const {
     firstName,
     lastName,
     age
   } = req.body;
-
-
   try {
-
     const user = await User.create({
       firstName,
       lastName,
@@ -26,7 +23,7 @@ const createUser = async (req, res) => {
     })
   }
 
-}
+} */
 
 const getUser = (req, res) => {
   res.json({
