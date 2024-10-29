@@ -3,7 +3,8 @@ const express = require('express');
 const session = require('express-session');
 const mongoose = require('mongoose');
 const userRoutes = require('./routes/user');
-const authRoutes = require('./routes/auth')
+const authRoutes = require('./routes/auth');
+const clubRoutes = require('./routes/club');
 const cors = require('cors');
 
 //express app
@@ -35,8 +36,10 @@ app.use(session({
 
 //routes
 app.use('/api/user', userRoutes);
-app.use('/api/auth', authRoutes)
+app.use('/api/auth', authRoutes);
+app.use('/api/clubs', clubRoutes);
 
+module.exports = app;
 
 // connect to db 
 mongoose.connect(process.env.MONGO_LOCAL_URI).then(() => {
@@ -46,9 +49,12 @@ mongoose.connect(process.env.MONGO_LOCAL_URI).then(() => {
     console.log('connected to db & listening on port ', process.env.PORT)
   })
 
+  
+
 }).catch(err => {
-  console.log('Error:',err)
+  console.log('Error:', err)
 })
+
 
 
 
