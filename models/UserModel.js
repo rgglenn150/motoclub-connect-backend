@@ -13,16 +13,16 @@ const userSchema = new Schema({
     type: String,
     required: true
   },
-  username:{
-    type:String,
-    required:true,
-    unique:true
+  username: {
+    type: String,
+    required: true,
+    unique: true
   },
-  firstName:{
-    type:String
+  firstName: {
+    type: String
   },
-  lastName:{
-    type:String
+  lastName: {
+    type: String
   },
 
 }, {
@@ -30,7 +30,7 @@ const userSchema = new Schema({
 })
 
 // Static signup method
-userSchema.statics.signup = async function (email, password,username,firstName,lastName) {
+userSchema.statics.signup = async function (email, password, username, firstName, lastName) {
 
   //validation
 
@@ -41,12 +41,12 @@ userSchema.statics.signup = async function (email, password,username,firstName,l
   if (!validator.isEmail(email)) {
     throw Error('Email is not valid')
   }
-  
+
 
   //enable in prod
- /*  if(!validator.isStrongPassword(password)){
-    throw Error('Password not strong enough')
-  } */
+  /*  if(!validator.isStrongPassword(password)){
+     throw Error('Password not strong enough')
+   } */
 
   const exists = await this.findOne({
     email
