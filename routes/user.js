@@ -1,6 +1,5 @@
 const express = require('express');
 const {
-  createUser,
   getUser
 } = require('../controllers/userController')
 
@@ -9,7 +8,6 @@ const User = require('../models/UserModel')
 
 
 router.get('/', getUser);
-/* router.post('/', createUser); */
 
 
 

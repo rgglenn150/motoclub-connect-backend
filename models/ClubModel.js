@@ -10,6 +10,10 @@ const clubSchema = new Schema({
   Description: {
     type: String
   },
+  members: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Member'
+  }]
 
 }, {
   timestamps: true
