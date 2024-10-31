@@ -30,7 +30,7 @@ This is the backend API for the MotoClub Connect mobile application, built using
 
 ### Prerequisites
 Make sure you have the following installed:
-- [Node.js](https://nodejs.org/) (v14 or later recommended)
+- [Node.js](https://nodejs.org/) (v20 or later recommended)
 - [MongoDB](https://www.mongodb.com/try/download/community) (or use [MongoDB Atlas](https://www.mongodb.com/cloud/atlas) for cloud hosting)
 
 ### Clone the Repository
