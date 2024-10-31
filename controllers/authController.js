@@ -92,7 +92,6 @@ const signupUser = async (req, res) => {
 }
 
 
-
 module.exports = ({
   loginUser,
   logout,
