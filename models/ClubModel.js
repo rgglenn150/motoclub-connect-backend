@@ -1,8 +1,7 @@
-const mongoose = require('mongoose')
-const Schema = mongoose.Schema;
+import mongoose from 'mongoose';
+const { Schema } = mongoose;
 
 const clubSchema = new Schema({
-
   clubName: {
     type: String,
     required: true
@@ -11,14 +10,13 @@ const clubSchema = new Schema({
     type: String
   },
   members: [{
-    type: mongoose.Schema.Types.ObjectId,
+    type: Schema.Types.ObjectId,
     ref: 'Member'
   }]
-
 }, {
   timestamps: true
-})
+});
 
 
 
-module.exports = mongoose.model('Club', clubSchema)
+export default mongoose.model('Club', clubSchema);

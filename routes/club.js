@@ -1,13 +1,12 @@
-const express = require('express');
-const clubController = require('../controllers/clubController');
-const router = express.Router();
-
+import express from 'express';
+import * as clubController from '../controllers/clubController.js';
 import authMiddleware from '../middlewares/authMiddleware.js';
 
+const router = express.Router();
 
-router.post('/addMember',authMiddleware, clubController.addMember);
-router.post('/create',authMiddleware, clubController.createClub);
+router.post('/addMember', authMiddleware, clubController.addMember);
+router.post('/create', authMiddleware, clubController.createClub);
 
 router.get('/', clubController.getAllClubs);
 
-module.exports = router;
+export default router;

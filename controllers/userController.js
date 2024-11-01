@@ -1,38 +1,12 @@
-const User = require('../models/UserModel')
+import User from '../models/UserModel.js';
 
-//get users
-
-//register user DO NOT USE.  
-/* const createUser = async (req, res) => {
-  const {
-    firstName,
-    lastName,
-    age
-  } = req.body;
+export const getUser = async (req, res) => {
   try {
-    const user = await User.create({
-      firstName,
-      lastName,
-      age
-    });
-    res.status(200).send(user)
+    const users = await User.find();
+    res.status(200).json(users);
   } catch (error) {
-    console.log(error);
-    res.status(400).send({
-      error: error.message
-    })
+    res.status(500).json({ message: error.message });
   }
-
-} */
-
-const getUser = (req, res) => {
-  res.json({
-    message: 'Get all user '
-  })
-}
+};
 
 
-
-module.exports = {
-  getUser
-}

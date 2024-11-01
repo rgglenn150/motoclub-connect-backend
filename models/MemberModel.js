@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 const memberSchema = new mongoose.Schema({
   name: { type: String, required: true },
@@ -7,4 +7,4 @@ const memberSchema = new mongoose.Schema({
   joinedDate: { type: Date, default: Date.now }
 });
 
-module.exports = mongoose.model('Member', memberSchema);
+export default mongoose.model('Member', memberSchema);
