@@ -1,11 +1,13 @@
-require('dotenv').config();
-const express = require('express');
-const session = require('express-session');
-const mongoose = require('mongoose');
-const userRoutes = require('./routes/user');
-const authRoutes = require('./routes/auth');
-const clubRoutes = require('./routes/club');
-const cors = require('cors');
+import dotenv from 'dotenv';
+import express from 'express';
+import session from 'express-session';
+import mongoose from 'mongoose';
+import userRoutes from './routes/user.js';
+import authRoutes from './routes/auth.js';
+import clubRoutes from './routes/club.js';
+import cors from 'cors';
+
+dotenv.config();
 
 //express app
 const app = express();
@@ -39,7 +41,7 @@ app.use('/api/user', userRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/clubs', clubRoutes);
 
-module.exports = app;
+export default app;
 
 // connect to db 
 mongoose.connect(process.env.MONGO_LOCAL_URI).then(() => {

@@ -24,6 +24,7 @@
   "name": "motoclub-connect-backend",
   "version": "1.0.0",
   "main": "server.js",
+  "type": "module",
   "devDependencies": {
     "@babel/cli": "^7.25.9",
     "@babel/preset-env": "^7.26.0",
