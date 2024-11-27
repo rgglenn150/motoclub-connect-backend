@@ -11,4 +11,3 @@ describe('GET /api/clubs', () => {
     assert.equal(res.body.clubs.length, clubs.length);
   });
 });
-

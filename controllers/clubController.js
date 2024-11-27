@@ -3,16 +3,13 @@ import Member from '../models/MemberModel.js';
 
 export { createClub, addMember, getAllClubs };
 
-
 async function createClub(req, res) {
   const club = await Club.create(req.body);
   res.status(200).json({
     message: 'Club created successfully',
-    club
+    club,
   });
 }
-
-
 
 async function addMember(req, res) {
   try {
@@ -36,15 +33,14 @@ async function addMember(req, res) {
   } catch (error) {
     res.status(500).json({ message: 'Error adding member', error });
   }
-};
+}
 
 async function getAllClubs(req, res) {
   const clubs = await Club.find();
   console.log('rgdb clubs : ', clubs);
-  
+
   res.status(200).json({
     message: 'Get all clubs ',
-    clubs
-  })
+    clubs,
+  });
 }
-

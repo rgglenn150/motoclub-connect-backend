@@ -3,7 +3,7 @@ const fs = require('fs');
 
 async function transpile(file) {
   const result = await babel.transformAsync(file, {
-    presets: ['@babel/preset-env']
+    presets: ['@babel/preset-env'],
   });
   return result.code;
 }
