@@ -39,7 +39,7 @@ app.use(
 //routes
 app.use('/api/user', userRoutes);
 app.use('/api/auth', authRoutes);
-app.use('/api/clubs', clubRoutes);
+app.use('/api/club', clubRoutes);
 
 export default app;
 

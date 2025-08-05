@@ -1,24 +1,78 @@
 import Club from '../models/ClubModel.js';
 import Member from '../models/MemberModel.js';
+import { validationResult } from 'express-validator';
 
-export { createClub, addMember, getAllClubs };
+export {
+  createClub,
+  addMember,
+  getAllClubs
+};
 
 async function createClub(req, res) {
-  const club = await Club.create(req.body);
-  res.status(200).json({
-    message: 'Club created successfully',
-    club,
-  });
+  // 1. Validate incoming data
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    // If there are validation errors, return a 400 Bad Request response
+    return res.status(400).json({
+      errors: errors.array()
+    });
+  }
+
+  // 2. Destructure sanitized data from the request body
+  const {
+    name,
+    description,
+    location,
+    isPrivate
+  } = req.body;
+
+  try {
+    // 3. Check if a club with the same name already exists
+    const existingClub = await Club.findOne({
+      clubName: name
+    });
+    if (existingClub) {
+      return res.status(400).json({
+        msg: 'A club with this name already exists.'
+      });
+    }
+
+    // 4. Create a new Club instance without any initial members
+    const newClub = new Club({
+      clubName: name, // Use 'name' from body for 'clubName' field
+      description,
+      location,
+      isPrivate,
+      createdBy: req.user._id, // Correctly reference the user's _id
+      // members property is omitted to allow the schema's default (empty array)
+    });
+
+    // 5. Save the new club to the database
+    await newClub.save();
+
+    // 6. Respond with the newly created club data
+    res.status(201).json(newClub);
+
+  } catch (err) {
+    // 7. Graceful error handling
+    console.error(err.message);
+    res.status(500).send('Server Error');
+  }
 }
 
 async function addMember(req, res) {
   try {
-    const { clubId, memberData } = req.body;
+    const {
+      clubId,
+      memberData
+    } = req.body;
 
     // Find the club by ID
     const club = await Club.findById(clubId);
     if (!club) {
-      return res.status(404).json({ message: 'Club not found' });
+      return res.status(404).json({
+        message: 'Club not found'
+      });
     }
 
     // Create a new member
@@ -29,9 +83,15 @@ async function addMember(req, res) {
     club.members.push(member._id);
     await club.save();
 
-    res.status(201).json({ message: 'Member added successfully', member });
+    res.status(201).json({
+      message: 'Member added successfully',
+      member
+    });
   } catch (error) {
-    res.status(500).json({ message: 'Error adding member', error });
+    res.status(500).json({
+      message: 'Error adding member',
+      error
+    });
   }
 }
 
