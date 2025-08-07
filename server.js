@@ -5,6 +5,7 @@ import mongoose from 'mongoose';
 import userRoutes from './routes/user.js';
 import authRoutes from './routes/auth.js';
 import clubRoutes from './routes/club.js';
+import eventRoutes from './routes/event.js';
 import cors from 'cors';
 
 dotenv.config();
@@ -40,6 +41,7 @@ app.use(
 app.use('/api/user', userRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/club', clubRoutes);
+app.use('/api/event', eventRoutes);
 
 export default app;
 

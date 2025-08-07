@@ -5,7 +5,8 @@ import { validationResult } from 'express-validator';
 export {
   createClub,
   addMember,
-  getAllClubs
+  getAllClubs,
+  getClubById
 };
 
 async function createClub(req, res) {
@@ -103,4 +104,17 @@ async function getAllClubs(req, res) {
     message: 'Get all clubs ',
     clubs,
   });
+}
+
+async function getClubById(req, res) {
+  try {
+    const club = await Club.findById(req.params.id).populate('members', 'username');
+    if (!club) {
+      return res.status(404).json({ msg: 'Club not found' });
+    }
+    res.json(club);
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).send('Server Error');
+  }
 }
