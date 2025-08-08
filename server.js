@@ -5,6 +5,7 @@ import mongoose from 'mongoose';
 import userRoutes from './routes/user.js';
 import authRoutes from './routes/auth.js';
 import clubRoutes from './routes/club.js';
+import eventRoutes from './routes/event.js';
 import cors from 'cors';
 
 dotenv.config();
@@ -39,23 +40,27 @@ app.use(
 //routes
 app.use('/api/user', userRoutes);
 app.use('/api/auth', authRoutes);
-app.use('/api/clubs', clubRoutes);
+app.use('/api/club', clubRoutes);
+app.use('/api/event', eventRoutes);
 
 export default app;
 
 // connect to db
-mongoose
-  .connect(process.env.MONGO_LOCAL_URI)
-  .then(() => {
-    // listen for requests
-    app.listen(process.env.PORT, () => {
-      console.log(
-        `connected to db & listening on  ,${process.env.PROTOCOL}://${process.env.HOST}:${process.env.PORT}`
-      );
+let server;
+if (process.env.NODE_ENV !== 'test') {
+  mongoose
+    .connect(process.env.MONGO_LOCAL_URI)
+    .then(() => {
+      // listen for requests
+      server = app.listen(process.env.PORT, () => {
+        console.log(
+          `connected to db & listening on  ,${process.env.PROTOCOL}://${process.env.HOST}:${process.env.PORT}`
+        );
+      });
+    })
+    .catch((err) => {
+      console.log('Error:', err);
     });
-  })
-  .catch((err) => {
-    console.log('Error:', err);
-  });
+}
 
-process.env;
+export { app, mongoose, server };

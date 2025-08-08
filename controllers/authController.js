@@ -3,18 +3,21 @@ import jwt from 'jsonwebtoken';
 import bcrypt from 'bcrypt';
 
 const createToken = (_id) =>
-  jwt.sign(
-    {
-      _id,
+  jwt.sign({
+      _id
     },
-    process.env.SECRET,
+    process.env.JWT_SECRET, // <-- Correct variable
     {
-      expiresIn: '3d',
+      expiresIn: '3d'
     }
   );
 
+
 export const loginUser = async (req, res) => {
-  const { email, password } = req.body;
+  const {
+    email,
+    password
+  } = req.body;
 
   const user = await User.findOne({
     email,
@@ -55,7 +58,13 @@ export const logout = (req, res) => {
 };
 
 export const signupUser = async (req, res) => {
-  const { email, password, username, firstName, lastName } = req.body;
+  const {
+    email,
+    password,
+    username,
+    firstName,
+    lastName
+  } = req.body;
 
   try {
     const user = await User.signup(
