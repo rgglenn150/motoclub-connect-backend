@@ -1,12 +1,14 @@
 import Club from '../models/ClubModel.js';
 import Member from '../models/MemberModel.js';
+import JoinRequest from '../models/JoinRequest.js';
 import { validationResult } from 'express-validator';
 
 export {
   createClub,
   addMember,
   getAllClubs,
-  getClubById
+  getClubById,
+  joinClub
 };
 
 async function createClub(req, res) {
@@ -98,11 +100,20 @@ async function addMember(req, res) {
 
 async function getAllClubs(req, res) {
   const clubs = await Club.find();
-  console.log('rgdb clubs : ', clubs);
+  const clubsWithId = clubs.map(club => ({
+    id: club._id,
+    clubName: club.clubName,
+    description: club.description,
+    location: club.location,
+    isPrivate: club.isPrivate,
+    members: club.members,
+    createdBy: club.createdBy,
+    createdAt: club.createdAt,
+  }));
 
   res.status(200).json({
     message: 'Get all clubs ',
-    clubs,
+    clubs: clubsWithId,
   });
 }
 
@@ -112,9 +123,41 @@ async function getClubById(req, res) {
     if (!club) {
       return res.status(404).json({ msg: 'Club not found' });
     }
+     console.log('rgdb club id : ', club);
     res.json(club);
   } catch (err) {
     console.error(err.message);
     res.status(500).send('Server Error');
+  }
+}
+
+async function joinClub(req, res) {
+  try {
+    const { clubId } = req.params;
+    const userId = req.user._id;
+
+    const club = await Club.findById(clubId);
+    if (!club) {
+      return res.status(404).json({ message: 'Club not found' });
+    }
+
+    const existingRequest = await JoinRequest.findOne({ user: userId, club: clubId });
+    if (existingRequest) {
+      return res.status(400).json({ message: 'You have already requested to join this club' });
+    }
+
+    const newJoinRequest = new JoinRequest({
+      user: userId,
+      club: clubId,
+    });
+
+    await newJoinRequest.save();
+
+    club.joinRequests.push(newJoinRequest._id);
+    await club.save();
+
+    res.status(201).json({ message: 'Request to join club sent successfully' });
+  } catch (error) {
+    res.status(500).json({ message: 'Error joining club', error });
   }
 }

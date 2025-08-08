@@ -8,7 +8,7 @@ export async function createEvent(req, res) {
   }
 
   const { name, description, startTime, endTime, location, eventType, club } = req.body;
-
+  console.log('Creating event with data:', req.body)
   try {
     const newEvent = new Event({
       name,

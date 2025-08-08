@@ -40,6 +40,12 @@ const clubSchema = new Schema(
         ref: 'Member', 
       },
     ],
+    joinRequests: [
+      {
+        type: Schema.Types.ObjectId,
+        ref: 'JoinRequest',
+      },
+    ],
   },
   {
     // Automatically adds createdAt and updatedAt fields
