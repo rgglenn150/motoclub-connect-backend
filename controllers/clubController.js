@@ -2,13 +2,15 @@ import Club from '../models/ClubModel.js';
 import Member from '../models/MemberModel.js';
 import JoinRequest from '../models/JoinRequest.js';
 import { validationResult } from 'express-validator';
+import cloudinary from '../utils/cloudinary.js';
 
 export {
   createClub,
   addMember,
   getAllClubs,
   getClubById,
-  joinClub
+  joinClub,
+  uploadClubLogo
 };
 
 async function createClub(req, res) {
@@ -50,14 +52,24 @@ async function createClub(req, res) {
       // members property is omitted to allow the schema's default (empty array)
     });
 
-    // 5. Save the new club to the database
+    // 5. Create and add the creator as an admin member of this club
+    const creatorMember = new Member({
+      name: req.user.username || 'Club Admin',
+      email: req.user.email || `${req.user._id}@users.local`,
+      club: newClub._id,
+      roles: ['member', 'admin'],
+    });
+    await creatorMember.save();
+    newClub.members.push(creatorMember._id);
+
+    // 6. Save the new club to the database
     await newClub.save();
 
-    // 6. Respond with the newly created club data
+    // 7. Respond with the newly created club data
     res.status(201).json(newClub);
 
   } catch (err) {
-    // 7. Graceful error handling
+    // 8. Graceful error handling
     console.error(err.message);
     res.status(500).send('Server Error');
   }
@@ -159,5 +171,48 @@ async function joinClub(req, res) {
     res.status(201).json({ message: 'Request to join club sent successfully' });
   } catch (error) {
     res.status(500).json({ message: 'Error joining club', error });
+  }
+}
+
+/**
+ * Uploads a club logo image to Cloudinary and stores the resulting URL on the club.
+ * Expects a multipart/form-data request with field name 'logo'.
+ */
+async function uploadClubLogo(req, res) {
+  try {
+    const { clubId } = req.params;
+
+    if (!req.file) {
+      return res.status(400).json({ message: 'Logo file is required (field name: logo)' });
+    }
+
+    const club = await Club.findById(clubId);
+    if (!club) {
+      return res.status(404).json({ message: 'Club not found' });
+    }
+
+    // Convert buffer to data URI to avoid temp files
+    const base64 = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
+
+    const uploadResult = await cloudinary.uploader.upload(base64, {
+      folder: 'motoclub-connect/clubs',
+      public_id: `club_${clubId}_logo`,
+      overwrite: true,
+      resource_type: 'image',
+      transformation: [{ width: 512, height: 512, crop: 'limit' }],
+    });
+
+    club.logoUrl = uploadResult.secure_url;
+    club.logoPublicId = uploadResult.public_id;
+    await club.save();
+
+    return res.status(200).json({
+      message: 'Club logo uploaded successfully',
+      logoUrl: club.logoUrl,
+      publicId: club.logoPublicId,
+    });
+  } catch (error) {
+    console.error('Error uploading club logo:', error);
+    return res.status(500).json({ message: 'Error uploading club logo', error: error?.message || error });
   }
 }

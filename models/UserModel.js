@@ -24,6 +24,14 @@ const userSchema = new mongoose.Schema(
     lastName: {
       type: String,
     },
+    role: {
+      type: String,
+      enum: ['user', 'admin'],
+      default: 'user'
+    },
+    profilePhoto: {
+      type: String
+    }
   },
   {
     timestamps: true,

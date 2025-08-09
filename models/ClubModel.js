@@ -46,6 +46,15 @@ const clubSchema = new Schema(
         ref: 'JoinRequest',
       },
     ],
+    // Optional logo fields stored in Cloudinary
+    logoUrl: {
+      type: String,
+      default: undefined,
+    },
+    logoPublicId: {
+      type: String,
+      default: undefined,
+    },
   },
   {
     // Automatically adds createdAt and updatedAt fields
