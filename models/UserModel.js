@@ -38,10 +38,10 @@ const userSchema = new mongoose.Schema(
   }
 );
 
-// Static signup method
+// Static signup method (must use function to have correct 'this')
 userSchema.static(
   'signup',
-  async (email, password, username, firstName, lastName) => {
+  async function (email, password, username, firstName, lastName) {
     //validation
 
     if (!email || !password) {

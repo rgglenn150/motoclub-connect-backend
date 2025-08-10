@@ -48,8 +48,10 @@ export default app;
 // connect to db
 let server;
 if (process.env.NODE_ENV !== 'test') {
+ 
   mongoose
     .connect(process.env.MONGO_LOCAL_URI)
+    //.connect(process.env.MONGO_URI)
     .then(() => {
       // listen for requests
       server = app.listen(process.env.PORT, () => {
@@ -63,4 +65,8 @@ if (process.env.NODE_ENV !== 'test') {
     });
 }
 
-export { app, mongoose, server };
+export {
+  app,
+  mongoose,
+  server
+};

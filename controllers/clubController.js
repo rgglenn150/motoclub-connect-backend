@@ -121,6 +121,7 @@ async function getAllClubs(req, res) {
     members: club.members,
     createdBy: club.createdBy,
     createdAt: club.createdAt,
+    logoUrl: club.logoUrl,
   }));
 
   res.status(200).json({
