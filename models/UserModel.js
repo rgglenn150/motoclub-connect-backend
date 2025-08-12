@@ -24,16 +24,24 @@ const userSchema = new mongoose.Schema(
     lastName: {
       type: String,
     },
+    role: {
+      type: String,
+      enum: ['user', 'admin'],
+      default: 'user'
+    },
+    profilePhoto: {
+      type: String
+    }
   },
   {
     timestamps: true,
   }
 );
 
-// Static signup method
+// Static signup method (must use function to have correct 'this')
 userSchema.static(
   'signup',
-  async (email, password, username, firstName, lastName) => {
+  async function (email, password, username, firstName, lastName) {
     //validation
 
     if (!email || !password) {
