@@ -4,7 +4,7 @@ import sharp from 'sharp';
 
 export const getUser = async (req, res) => {
   try {
-    const users = await User.find();
+    const users = await User.find().select('-password');
     res.status(200).json(users);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -27,7 +27,7 @@ export const uploadProfilePhoto = async (req, res) => {
     // Process image with sharp
     const processedImageBuffer = await sharp(req.file.buffer)
       .resize(256, 256, { fit: 'cover' })
-      .webp({ quality: 80 })
+      .jpeg({ quality: 80 })
       .toBuffer();
 
     // If user already has a profile photo, delete it from Cloudinary first
