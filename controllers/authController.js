@@ -40,9 +40,13 @@ export const loginUser = async (req, res) => {
 
   req.session.userId = user._id;
   const token = createToken(user._id);
+  const userObject = user.toObject();
+  delete userObject.password;
+
   res.status(200).json({
     message: 'Logged in successfully',
     token,
+    user: userObject,
   });
 };
 

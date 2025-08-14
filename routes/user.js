@@ -7,8 +7,8 @@ import authMiddleware from '../middlewares/authMiddleware.js';
 
 const router = express.Router();
 
-router.get('/', getUser);
-router.put('/:id', updateUser);
+router.get('/',authMiddleware, getUser);
+router.put('/:id',authMiddleware,updateUser);
 router.post('/profile-photo', authMiddleware, upload.single('profilePhoto'), uploadProfilePhoto);
 
 
