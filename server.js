@@ -42,6 +42,9 @@ app.use('/api/user', userRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/club', clubRoutes);
 app.use('/api/event', eventRoutes);
+app.get('/api/wakeup', (req, res) => {
+  res.json({ message: 'Server is awake and ready.' });
+});
 
 
 export default app;
