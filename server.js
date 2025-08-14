@@ -48,8 +48,10 @@ export default app;
 
 // connect to db
 let server;
-if (process.env.NODE_ENV !== 'test') {
- 
+console.log('NODE_ENV:', process.env.NODE_ENV);
+//prod 
+if (process.env.NODE_ENV !== 'development') {
+
   mongoose
     //.connect(process.env.MONGO_LOCAL_URI)
     .connect(process.env.MONGO_URI)
@@ -65,7 +67,22 @@ if (process.env.NODE_ENV !== 'test') {
       console.log('Error:', err);
     });
 }
-
+// dev
+else if (process.env.NODE_ENV === 'development') {
+  mongoose
+    .connect(process.env.MONGO_LOCAL_URI)
+    .then(() => {
+      // listen for requests
+      server = app.listen(process.env.PORT, () => {
+        console.log(
+          `connected to db & listening on  ,${process.env.PROTOCOL}://${process.env.HOST}:${process.env.PORT}`
+        );
+      });
+    })
+    .catch((err) => {
+      console.log('Error:', err);
+    });
+}
 export {
   app,
   mongoose,
