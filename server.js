@@ -43,6 +43,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/club', clubRoutes);
 app.use('/api/event', eventRoutes);
 
+
 export default app;
 
 // connect to db

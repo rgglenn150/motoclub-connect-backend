@@ -27,7 +27,7 @@ export const uploadProfilePhoto = async (req, res) => {
     // Process image with sharp
     const processedImageBuffer = await sharp(req.file.buffer)
       .resize(256, 256, { fit: 'cover' })
-      .webp({ quality: 80 })
+      .jpeg({ quality: 80 })
       .toBuffer();
 
     // If user already has a profile photo, delete it from Cloudinary first
