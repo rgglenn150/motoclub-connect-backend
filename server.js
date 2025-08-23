@@ -52,12 +52,15 @@ export default app;
 // connect to db
 let server;
 console.log('NODE_ENV:', process.env.NODE_ENV);
-//prod 
-if (process.env.NODE_ENV !== 'development') {
 
+// Test environment - don't auto-connect or start server
+if (process.env.NODE_ENV === 'test') {
+  console.log('Test environment detected - database connection will be handled by tests');
+}
+// Development environment
+else if (process.env.NODE_ENV === 'development') {
   mongoose
-    //.connect(process.env.MONGO_LOCAL_URI)
-    .connect(process.env.MONGO_URI)
+    .connect(process.env.MONGO_LOCAL_URI)
     .then(() => {
       // listen for requests
       server = app.listen(process.env.PORT, () => {
@@ -70,10 +73,11 @@ if (process.env.NODE_ENV !== 'development') {
       console.log('Error:', err);
     });
 }
-// dev
-else if (process.env.NODE_ENV === 'development') {
+// Production environment
+else {
   mongoose
-    .connect(process.env.MONGO_LOCAL_URI)
+    //.connect(process.env.MONGO_LOCAL_URI)
+    .connect(process.env.MONGO_URI)
     .then(() => {
       // listen for requests
       server = app.listen(process.env.PORT, () => {
