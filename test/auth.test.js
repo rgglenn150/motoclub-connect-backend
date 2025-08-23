@@ -51,4 +51,55 @@ describe('Auth routes', () => {
       console.error('Logout response:', res.status, res.body);
     }
   });
+
+  it('POST /api/auth/facebook/register should handle missing access token', async () => {
+    const res = await request(app)
+      .post('/api/auth/facebook/register')
+      .send({
+        username: 'testuser'
+      });
+    if (res.status !== 400) {
+      console.error('Facebook register without token response:', res.status, res.body);
+    }
+    if (!res.body.message || !res.body.message.includes('access token')) {
+      throw new Error('Expected error message about missing access token');
+    }
+  });
+
+  it('POST /api/auth/facebook should handle missing access token', async () => {
+    const res = await request(app)
+      .post('/api/auth/facebook')
+      .send({});
+    if (res.status !== 400) {
+      console.error('Facebook login without token response:', res.status, res.body);
+    }
+    if (!res.body.message || !res.body.message.includes('access token')) {
+      throw new Error('Expected error message about missing access token');
+    }
+  });
+
+  it('POST /api/auth/facebook should handle invalid access token', async () => {
+    const res = await request(app)
+      .post('/api/auth/facebook')
+      .send({
+        accessToken: 'invalid_token_123'
+      });
+    // Should return 400 or 404 for invalid token
+    if (![400, 404].includes(res.status)) {
+      console.error('Facebook login with invalid token response:', res.status, res.body);
+    }
+  });
+
+  it('POST /api/auth/facebook/register should handle invalid access token', async () => {
+    const res = await request(app)
+      .post('/api/auth/facebook/register')
+      .send({
+        accessToken: 'invalid_token_123',
+        username: 'testuser'
+      });
+    // Should return 400 for invalid token
+    if (res.status !== 400) {
+      console.error('Facebook register with invalid token response:', res.status, res.body);
+    }
+  });
 });

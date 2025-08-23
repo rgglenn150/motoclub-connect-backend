@@ -1,6 +1,7 @@
 {
   "dependencies": {
     "@babel/core": "^7.26.0",
+    "axios": "^1.11.0",
     "bcrypt": "^5.1.0",
     "chai-http": "^5.1.1",
     "cloudinary": "^2.7.0",
@@ -12,10 +13,10 @@
     "jsonwebtoken": "^8.5.1",
     "mongoose": "^8.4.0",
     "multer": "^2.0.2",
-    
+    "passport-facebook-token": "^4.0.0",
+    "sharp": "^0.33.0",
     "supertest": "^7.0.0",
-    "validator": "^13.7.0",
-    "sharp": "^0.33.0"
+    "validator": "^13.7.0"
   },
   "engines": {
     "node": "^20.17.0 || ^22.3.0",
@@ -45,8 +46,8 @@
     "eslint-plugin-prettier": "^5.2.1",
     "eslint-plugin-security": "^3.0.1",
     "mocha": "^10.8.0",
-    "prettier": "^3.4.1",
-    "nodemon": "^3.0.1"
+    "nodemon": "^3.0.1",
+    "prettier": "^3.4.1"
   },
   "repository": {
     "type": "git",
