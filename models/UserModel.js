@@ -118,12 +118,18 @@ userSchema.static(
     }
 
     // Create new user with Facebook data
-    let generatedUsername = username || `fb_${facebookId}_${Date.now()}`;
+    let generatedUsername = username;
+    
+    if (!generatedUsername) {
+      // Generate username from Facebook name
+      const nameUsername = `${firstName}${lastName}`.toLowerCase().replace(/[^a-z0-9]/g, '');
+      generatedUsername = nameUsername || `fbuser_${Date.now()}`;
+    }
     
     // Ensure username is unique
     const existingUsernameUser = await this.findOne({ username: generatedUsername });
     if (existingUsernameUser) {
-      generatedUsername = `fb_${facebookId}_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+      generatedUsername = `${generatedUsername}_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
     }
     
     user = await this.create({
