@@ -126,10 +126,16 @@ userSchema.static(
       generatedUsername = nameUsername || `fbuser_${Date.now()}`;
     }
     
-    // Ensure username is unique
+    // Check if username already exists
     const existingUsernameUser = await this.findOne({ username: generatedUsername });
     if (existingUsernameUser) {
-      generatedUsername = `${generatedUsername}_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+      if (username) {
+        // If username was explicitly provided and already exists, throw error
+        throw new Error('Username already exists');
+      } else {
+        // If username was auto-generated, make it unique
+        generatedUsername = `${generatedUsername}_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+      }
     }
     
     user = await this.create({

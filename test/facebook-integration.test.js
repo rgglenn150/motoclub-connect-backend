@@ -3,14 +3,19 @@ import request from 'supertest';
 import sinon from 'sinon';
 import axios from 'axios';
 import jwt from 'jsonwebtoken';
+import mongoose from 'mongoose';
 import { app } from '../server.js';
 import User from '../models/UserModel.js';
 
 describe('Facebook Authentication Integration', function() {
   let axiosStub;
   
-  beforeEach(function() {
+  beforeEach(async function() {
     axiosStub = sinon.stub(axios, 'get');
+    // Clean up test database - check if connection is available
+    if (mongoose.connection.readyState === 1) {
+      await User.deleteMany({});
+    }
   });
   
   afterEach(function() {

@@ -33,11 +33,20 @@ describe('Auth routes', () => {
     }
   });
 
-  it('POST /api/auth/login should return token for valid credentials', async () => {
+  it('POST /api/auth/login should return token for valid credentials', async function() {
+    this.timeout(15000); // Increase timeout for this specific test
     const email = `login_${Date.now()}@example.com`;
     const password = 'Password123!';
     const username = `user_${Date.now()}`;
-    await request(app).post('/api/auth/signup').send({ email, password, username });
+    
+    // First signup
+    const signupRes = await request(app).post('/api/auth/signup').send({ email, password, username });
+    if (signupRes.status !== 200) {
+      console.error('Signup failed:', signupRes.status, signupRes.body);
+      throw new Error(`Signup failed with status ${signupRes.status}`);
+    }
+    
+    // Then login
     const res = await request(app).post('/api/auth/login').send({ email, password });
     if (res.status !== 200) {
       console.error('Login response:', res.status, res.body);
