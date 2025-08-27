@@ -20,13 +20,17 @@ function configureCloudinaryFromEnv() {
     } catch (e) {
       // Fallback regex
       try {
-        const match = url.match(/^cloudinary:\/\/([^:]+):([^@]+)@([^\/?#]+).*$/);
+        const match = url.match(
+          /^cloudinary:\/\/([^:]+):([^@]+)@([^\/?#]+).*$/
+        );
         if (match) {
           apiKey = apiKey || match[1];
           apiSecret = apiSecret || match[2];
           cloudName = cloudName || match[3];
         }
-      } catch (_) { /* noop */ }
+      } catch (_) {
+        /* noop */
+      }
     }
   }
 

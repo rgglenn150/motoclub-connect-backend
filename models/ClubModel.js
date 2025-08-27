@@ -37,7 +37,7 @@ const clubSchema = new Schema(
     members: [
       {
         type: Schema.Types.ObjectId,
-        ref: 'Member', 
+        ref: 'Member',
       },
     ],
     joinRequests: [

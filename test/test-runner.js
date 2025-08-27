@@ -21,18 +21,20 @@ async function runBasicTests() {
     console.log('✓ Database connected successfully');
 
     console.log('\n=== User Model Validation Tests ===');
-    
+
     // Test 1: Normal user should require password
     try {
       const user = new User({
         email: 'test@example.com',
         username: 'testuser',
         firstName: 'Test',
-        lastName: 'User'
+        lastName: 'User',
         // No password - should fail
       });
       await user.validate();
-      console.log('✗ ERROR: Normal user validation should have failed without password');
+      console.log(
+        '✗ ERROR: Normal user validation should have failed without password'
+      );
     } catch (error) {
       console.log('✓ Normal user correctly requires password');
     }
@@ -45,7 +47,7 @@ async function runBasicTests() {
         firstName: 'Test',
         lastName: 'User',
         facebookId: '123456789',
-        facebookEmail: 'fbtest@example.com'
+        facebookEmail: 'fbtest@example.com',
         // No password - should be OK for Facebook users
       });
       await fbUser.validate();
@@ -61,9 +63,9 @@ async function runBasicTests() {
       firstName: 'Photo',
       lastName: 'User',
       password: 'hashedpassword123',
-      profilePhoto: 'https://example.com/photo.jpg'
+      profilePhoto: 'https://example.com/photo.jpg',
     });
-    
+
     if (userWithPhoto.profilePhoto) {
       console.log('✓ profilePhoto field is correctly preserved');
     } else {
@@ -103,8 +105,9 @@ async function runBasicTests() {
     }
 
     console.log('\n=== All Basic Tests Completed ===');
-    console.log('Ready to run full test suite with: NODE_ENV=test yarn mocha --timeout 10000');
-
+    console.log(
+      'Ready to run full test suite with: NODE_ENV=test yarn mocha --timeout 10000'
+    );
   } catch (error) {
     console.error('Test runner failed:', error);
   } finally {

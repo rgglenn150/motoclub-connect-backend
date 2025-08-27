@@ -1,5 +1,9 @@
 import express from 'express';
-import { createEvent, getAllEvents, getEventsByClub } from '../controllers/eventController.js';
+import {
+  createEvent,
+  getAllEvents,
+  getEventsByClub,
+} from '../controllers/eventController.js';
 import authMiddleware from '../middlewares/authMiddleware.js';
 
 const router = express.Router();

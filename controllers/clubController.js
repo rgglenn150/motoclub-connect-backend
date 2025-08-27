@@ -10,7 +10,7 @@ export {
   getAllClubs,
   getClubById,
   joinClub,
-  uploadClubLogo
+  uploadClubLogo,
 };
 
 async function createClub(req, res) {
@@ -19,26 +19,21 @@ async function createClub(req, res) {
   if (!errors.isEmpty()) {
     // If there are validation errors, return a 400 Bad Request response
     return res.status(400).json({
-      errors: errors.array()
+      errors: errors.array(),
     });
   }
 
   // 2. Destructure sanitized data from the request body
-  const {
-    name,
-    description,
-    location,
-    isPrivate
-  } = req.body;
+  const { name, description, location, isPrivate } = req.body;
 
   try {
     // 3. Check if a club with the same name already exists
     const existingClub = await Club.findOne({
-      clubName: name
+      clubName: name,
     });
     if (existingClub) {
       return res.status(400).json({
-        msg: 'A club with this name already exists.'
+        msg: 'A club with this name already exists.',
       });
     }
 
@@ -67,7 +62,6 @@ async function createClub(req, res) {
 
     // 7. Respond with the newly created club data
     res.status(201).json(newClub);
-
   } catch (err) {
     // 8. Graceful error handling
     console.error(err.message);
@@ -77,16 +71,13 @@ async function createClub(req, res) {
 
 async function addMember(req, res) {
   try {
-    const {
-      clubId,
-      memberData
-    } = req.body;
+    const { clubId, memberData } = req.body;
 
     // Find the club by ID
     const club = await Club.findById(clubId);
     if (!club) {
       return res.status(404).json({
-        message: 'Club not found'
+        message: 'Club not found',
       });
     }
 
@@ -100,19 +91,19 @@ async function addMember(req, res) {
 
     res.status(201).json({
       message: 'Member added successfully',
-      member
+      member,
     });
   } catch (error) {
     res.status(500).json({
       message: 'Error adding member',
-      error
+      error,
     });
   }
 }
 
 async function getAllClubs(req, res) {
   const clubs = await Club.find();
-  const clubsWithId = clubs.map(club => ({
+  const clubsWithId = clubs.map((club) => ({
     id: club._id,
     clubName: club.clubName,
     description: club.description,
@@ -132,11 +123,14 @@ async function getAllClubs(req, res) {
 
 async function getClubById(req, res) {
   try {
-    const club = await Club.findById(req.params.id).populate('members', 'username');
+    const club = await Club.findById(req.params.id).populate(
+      'members',
+      'username'
+    );
     if (!club) {
       return res.status(404).json({ msg: 'Club not found' });
     }
-     console.log('rgdb club id : ', club);
+    console.log('rgdb club id : ', club);
     res.json(club);
   } catch (err) {
     console.error(err.message);
@@ -154,9 +148,14 @@ async function joinClub(req, res) {
       return res.status(404).json({ message: 'Club not found' });
     }
 
-    const existingRequest = await JoinRequest.findOne({ user: userId, club: clubId });
+    const existingRequest = await JoinRequest.findOne({
+      user: userId,
+      club: clubId,
+    });
     if (existingRequest) {
-      return res.status(400).json({ message: 'You have already requested to join this club' });
+      return res
+        .status(400)
+        .json({ message: 'You have already requested to join this club' });
     }
 
     const newJoinRequest = new JoinRequest({
@@ -184,7 +183,9 @@ async function uploadClubLogo(req, res) {
     const { clubId } = req.params;
 
     if (!req.file) {
-      return res.status(400).json({ message: 'Logo file is required (field name: logo)' });
+      return res
+        .status(400)
+        .json({ message: 'Logo file is required (field name: logo)' });
     }
 
     const club = await Club.findById(clubId);
@@ -214,6 +215,11 @@ async function uploadClubLogo(req, res) {
     });
   } catch (error) {
     console.error('Error uploading club logo:', error);
-    return res.status(500).json({ message: 'Error uploading club logo', error: error?.message || error });
+    return res
+      .status(500)
+      .json({
+        message: 'Error uploading club logo',
+        error: error?.message || error,
+      });
   }
 }
