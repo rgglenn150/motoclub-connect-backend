@@ -13,7 +13,7 @@ export const ensureConnection = async () => {
   
   if (mongoose.connection.readyState === 0) {
     if (!connectionPromise) {
-      connectionPromise = mongoose.connect(process.env.MONGO_LOCAL_URI);
+      connectionPromise = mongoose.connect(process.env.MONGO_LOCAL_URI_TEST);
     }
     await connectionPromise;
   }

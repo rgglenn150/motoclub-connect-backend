@@ -17,7 +17,7 @@ console.log('NODE_ENV:', process.env.NODE_ENV);
 async function runBasicTests() {
   try {
     console.log('\n=== Database Connection Test ===');
-    await mongoose.connect(process.env.MONGO_LOCAL_URI);
+    await mongoose.connect(process.env.MONGO_LOCAL_URI_TEST);
     console.log('✓ Database connected successfully');
 
     console.log('\n=== User Model Validation Tests ===');
@@ -92,10 +92,10 @@ async function runBasicTests() {
     }
 
     console.log('\n=== Environment Configuration Test ===');
-    if (process.env.MONGO_LOCAL_URI) {
-      console.log('✓ MONGO_LOCAL_URI is configured');
+    if (process.env.MONGO_LOCAL_URI_TEST) {
+      console.log('✓ MONGO_LOCAL_URI_TEST is configured');
     } else {
-      console.log('✗ ERROR: MONGO_LOCAL_URI is not configured');
+      console.log('✗ ERROR: MONGO_LOCAL_URI_TEST is not configured');
     }
 
     if (process.env.JWT_SECRET) {

@@ -82,6 +82,12 @@ export const facebookLogin = async (req, res) => {
           message: 'User not found. Please register first.',
         });
       }
+    } else {
+      // User found with Facebook ID - update profile photo from Facebook data
+      if (picture?.data?.url) {
+        user.profilePhoto = picture.data.url;
+        await user.save();
+      }
     }
 
     // Create JWT token
