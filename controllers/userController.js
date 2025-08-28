@@ -13,8 +13,7 @@ export const getUser = async (req, res) => {
 
 export const uploadProfilePhoto = async (req, res) => {
   try {
-
-    console.log('rgdb user id : ', req.user._id,req.user.id);
+    console.log('rgdb user id : ', req.user._id, req.user.id);
     const user = await User.findById(req.user._id);
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
@@ -37,19 +36,20 @@ export const uploadProfilePhoto = async (req, res) => {
     }
 
     // Upload to Cloudinary
-    cloudinary.uploader.upload_stream(
-      { folder: 'motoclub-connect/users' },
-      async (error, result) => {
-        if (error) {
-          console.error('Cloudinary upload error:', error);
-          return res.status(500).json({ message: 'Image upload failed' });
+    cloudinary.uploader
+      .upload_stream(
+        { folder: 'motoclub-connect/users' },
+        async (error, result) => {
+          if (error) {
+            console.error('Cloudinary upload error:', error);
+            return res.status(500).json({ message: 'Image upload failed' });
+          }
+          user.profilePhoto = result.secure_url;
+          await user.save();
+          res.status(200).json({ imageUrl: result.secure_url });
         }
-        user.profilePhoto = result.secure_url;
-        await user.save();
-        res.status(200).json({ imageUrl: result.secure_url });
-      }
-    ).end(processedImageBuffer);
-
+      )
+      .end(processedImageBuffer);
   } catch (error) {
     console.error('Error in uploadProfilePhoto:', error);
     res.status(500).json({ message: error.message });

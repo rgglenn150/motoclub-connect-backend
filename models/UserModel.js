@@ -11,7 +11,7 @@ const userSchema = new mongoose.Schema(
     },
     password: {
       type: String,
-      required: function() {
+      required: function () {
         return !this.facebookId; // Password not required if user has Facebook ID
       },
     },
@@ -29,20 +29,20 @@ const userSchema = new mongoose.Schema(
     role: {
       type: String,
       enum: ['user', 'admin'],
-      default: 'user'
+      default: 'user',
     },
     profilePhoto: {
-      type: String
+      type: String,
     },
     facebookId: {
       type: String,
       unique: true,
-      sparse: true
+      sparse: true,
     },
     facebookEmail: {
       type: String,
-      sparse: true
-    }
+      sparse: true,
+    },
   },
   {
     timestamps: true,
@@ -94,10 +94,17 @@ userSchema.static(
 // Static method for Facebook signup
 userSchema.static(
   'facebookSignup',
-  async function (facebookId, email, firstName, lastName, profilePhoto, username) {
+  async function (
+    facebookId,
+    email,
+    firstName,
+    lastName,
+    profilePhoto,
+    username
+  ) {
     // Check if user exists with Facebook ID
     let user = await this.findOne({ facebookId });
-    
+
     if (user) {
       return user;
     }
@@ -119,19 +126,29 @@ userSchema.static(
 
     // Create new user with Facebook data
     let generatedUsername = username;
-    
+
     if (!generatedUsername) {
       // Generate username from Facebook name
-      const nameUsername = `${firstName}${lastName}`.toLowerCase().replace(/[^a-z0-9]/g, '');
+      const nameUsername = `${firstName}${lastName}`
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, '');
       generatedUsername = nameUsername || `fbuser_${Date.now()}`;
     }
-    
-    // Ensure username is unique
-    const existingUsernameUser = await this.findOne({ username: generatedUsername });
+
+    // Check if username already exists
+    const existingUsernameUser = await this.findOne({
+      username: generatedUsername,
+    });
     if (existingUsernameUser) {
-      generatedUsername = `${generatedUsername}_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+      if (username) {
+        // If username was explicitly provided and already exists, throw error
+        throw new Error('Username already exists');
+      } else {
+        // If username was auto-generated, make it unique
+        generatedUsername = `${generatedUsername}_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+      }
     }
-    
+
     user = await this.create({
       facebookId,
       email,
