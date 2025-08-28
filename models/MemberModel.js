@@ -2,9 +2,7 @@ import mongoose from 'mongoose';
 const { Schema } = mongoose;
 
 const memberSchema = new Schema({
-  name: { type: String, required: true },
-  // Removing unique constraint to allow the same user email to be in multiple clubs
-  email: { type: String, required: true },
+  user: { type: Schema.Types.ObjectId, ref: 'User', required: true },
   club: { type: Schema.Types.ObjectId, ref: 'Club', required: true },
   roles: {
     type: [String],
@@ -13,5 +11,8 @@ const memberSchema = new Schema({
   },
   joinedDate: { type: Date, default: Date.now },
 });
+
+// Add a compound index to ensure a user can only be a member of a club once
+memberSchema.index({ user: 1, club: 1 }, { unique: true });
 
 export default mongoose.model('Member', memberSchema);

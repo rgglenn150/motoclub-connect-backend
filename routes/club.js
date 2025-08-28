@@ -7,6 +7,12 @@ import {
   getClubById,
   joinClub,
   uploadClubLogo,
+  getMembershipStatus,
+  getJoinRequests,
+  approveJoinRequest,
+  rejectJoinRequest,
+  removeMember,
+  getClubMembers,
 } from '../controllers/clubController.js';
 import authMiddleware from '../middlewares/authMiddleware.js';
 
@@ -30,5 +36,15 @@ router.post(
 
 router.get('/', getAllClubs);
 router.get('/:id', authMiddleware, getClubById);
+router.get('/:clubId/membership-status', authMiddleware, getMembershipStatus);
+
+// Join request management endpoints (admin only)
+router.get('/:clubId/join-requests', authMiddleware, getJoinRequests);
+router.post('/:clubId/join-requests/:requestId/approve', authMiddleware, approveJoinRequest);
+router.post('/:clubId/join-requests/:requestId/reject', authMiddleware, rejectJoinRequest);
+
+// Member management endpoints (admin only)
+router.get('/:clubId/members', authMiddleware, getClubMembers);
+router.delete('/:clubId/members/:memberId', authMiddleware, removeMember);
 
 export default router;
