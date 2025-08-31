@@ -489,17 +489,19 @@ async function getJoinRequests(req, res) {
     const joinRequests = await JoinRequest.find({ 
       club: clubId, 
       status: 'pending' 
-    }).populate('user', 'username email firstName lastName');
+    }).populate('user', 'username email firstName lastName profilePicture');
 
     // Format response to match required structure
     const formattedRequests = joinRequests.map(request => ({
       _id: request._id,
       user: {
+        _id: request.user._id,
         name: request.user.username || 
           (request.user.firstName && request.user.lastName ? 
             `${request.user.firstName} ${request.user.lastName}` : 
             'Unknown User'),
         email: request.user.email,
+        profilePicture: request.user.profilePicture,
       },
       club: request.club,
       status: request.status,

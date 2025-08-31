@@ -3,8 +3,7 @@ import jwt from 'jsonwebtoken';
 import bcrypt from 'bcrypt';
 
 const createToken = (_id) =>
-  jwt.sign(
-    {
+  jwt.sign({
       _id,
     },
     process.env.JWT_SECRET, // <-- Correct variable
@@ -14,8 +13,11 @@ const createToken = (_id) =>
   );
 
 export const loginUser = async (req, res) => {
-  const { email, password } = req.body;
-
+  const {
+    email,
+    password
+  } = req.body;
+  console.log('rgdb email', email);
   const user = await User.findOne({
     email,
   });
@@ -59,7 +61,13 @@ export const logout = (req, res) => {
 };
 
 export const signupUser = async (req, res) => {
-  const { email, password, username, firstName, lastName } = req.body;
+  const {
+    email,
+    password,
+    username,
+    firstName,
+    lastName
+  } = req.body;
 
   try {
     const user = await User.signup(
@@ -69,10 +77,14 @@ export const signupUser = async (req, res) => {
       firstName,
       lastName
     );
+   
     const token = createToken(user._id);
+    const userObject = user.toObject();
+    delete userObject.password;
     res.status(200).send({
       email,
       token,
+      user: userObject,
     });
   } catch (error) {
     console.log(error);
