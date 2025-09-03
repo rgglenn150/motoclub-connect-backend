@@ -40,6 +40,15 @@ const eventSchema = new Schema(
       ref: 'User',
       required: true,
     },
+    // Optional image fields stored in Cloudinary
+    imageUrl: {
+      type: String,
+      default: undefined,
+    },
+    imagePublicId: {
+      type: String,
+      default: undefined,
+    },
   },
   {
     timestamps: true,
