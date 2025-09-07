@@ -28,7 +28,7 @@ export {
 };
 
 /**
- * GET /api/club/:clubId/members - Get all club members (admin only)
+ * GET /api/club/:clubId/members - Get all club members (members and admins can view)
  */
 async function getClubMembers(req, res) {
   try {
@@ -46,14 +46,14 @@ async function getClubMembers(req, res) {
       return res.status(404).json({ message: 'Club not found' });
     }
 
-    // Verify user is admin of this club
-    const adminCheck = await verifyClubAdmin(userId, clubId);
-    if (!adminCheck.isAdmin) {
-      return res.status(403).json({ message: adminCheck.error });
+    // Verify user is a member or admin of this club
+    const userMembership = await Member.findOne({ user: userId, club: clubId });
+    if (!userMembership) {
+      return res.status(403).json({ message: 'You must be a member of this club to view the members list' });
     }
 
     // Get all members for the club, populating the user's details
-    const members = await Member.find({ club: clubId }).populate('user', 'username email firstName lastName profilePicture');
+    const members = await Member.find({ club: clubId }).populate('user', 'username email firstName lastName profilePhoto');
 
     // Format the response to match what the frontend expects
     const formattedMembers = members.map(member => ({
@@ -62,7 +62,10 @@ async function getClubMembers(req, res) {
         _id: member.user._id,
         name: member.user.username || `${member.user.firstName} ${member.user.lastName}`.trim() || 'Unnamed User',
         email: member.user.email,
-        profilePicture: member.user.profilePicture,
+        username: member.user.username,
+        firstName: member.user.firstName,
+        lastName: member.user.lastName,
+        profilePicture: member.user.profilePhoto,
       },
       club: member.club,
       role: member.roles.includes('admin') ? 'admin' : 'member',
@@ -501,7 +504,7 @@ async function getJoinRequests(req, res) {
     const joinRequests = await JoinRequest.find({ 
       club: clubId, 
       status: 'pending' 
-    }).populate('user', 'username email firstName lastName profilePicture');
+    }).populate('user', 'username email firstName lastName profilePhoto');
 
     // Format response to match required structure
     const formattedRequests = joinRequests.map(request => ({
@@ -513,7 +516,10 @@ async function getJoinRequests(req, res) {
             `${request.user.firstName} ${request.user.lastName}` : 
             'Unknown User'),
         email: request.user.email,
-        profilePicture: request.user.profilePicture,
+        username: request.user.username,
+        firstName: request.user.firstName,
+        lastName: request.user.lastName,
+        profilePicture: request.user.profilePhoto,
       },
       club: request.club,
       status: request.status,
