@@ -9,16 +9,31 @@ export async function createEvent(req, res) {
     return res.status(400).json({ errors: errors.array() });
   }
 
-  const { name, description, startTime, endTime, location, eventType, club, imageUrl, imagePublicId } =
+  const { name, description, startTime, endTime, location, geolocation, eventType, club, imageUrl, imagePublicId } =
     req.body;
   console.log('Creating event with data:', req.body);
   try {
+    // Build geolocation object if provided
+    const geolocationData = {};
+    if (geolocation) {
+      if (geolocation.latitude !== undefined) {
+        geolocationData.latitude = geolocation.latitude;
+      }
+      if (geolocation.longitude !== undefined) {
+        geolocationData.longitude = geolocation.longitude;
+      }
+      if (geolocation.placeName !== undefined) {
+        geolocationData.placeName = geolocation.placeName;
+      }
+    }
+
     const newEvent = new Event({
       name,
       description,
       startTime,
       endTime,
       location,
+      ...(Object.keys(geolocationData).length > 0 && { geolocation: geolocationData }),
       eventType,
       club,
       createdBy: req.user._id,

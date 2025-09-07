@@ -25,6 +25,22 @@ const eventSchema = new Schema(
       type: String,
       trim: true,
     },
+    geolocation: {
+      latitude: {
+        type: Number,
+        min: -90,
+        max: 90,
+      },
+      longitude: {
+        type: Number,
+        min: -180,
+        max: 180,
+      },
+      placeName: {
+        type: String,
+        trim: true,
+      },
+    },
     eventType: {
       type: String,
       enum: ['ride', 'meeting', 'meetup', 'event'],
@@ -54,5 +70,11 @@ const eventSchema = new Schema(
     timestamps: true,
   }
 );
+
+// Create a 2dsphere index for geospatial queries (if geolocation exists)
+eventSchema.index({
+  'geolocation.latitude': 1,
+  'geolocation.longitude': 1
+});
 
 export default mongoose.model('Event', eventSchema);
