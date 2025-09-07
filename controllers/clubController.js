@@ -90,7 +90,7 @@ async function createClub(req, res) {
   }
 
   // 2. Destructure sanitized data from the request body
-  const { name, description, location, isPrivate } = req.body;
+  const { name, description, location, isPrivate, geolocation } = req.body;
 
   try {
     // 3. Get the full user data to access email and username
@@ -110,14 +110,25 @@ async function createClub(req, res) {
     }
 
     // 5. Create a new Club instance without any initial members
-    const newClub = new Club({
+    const clubData = {
       clubName: name, // Use 'name' from body for 'clubName' field
       description,
       location,
       isPrivate,
       createdBy: req.user._id, // Correctly reference the user's _id
       // members property is omitted to allow the schema's default (empty array)
-    });
+    };
+
+    // Add geolocation data if provided
+    if (geolocation && geolocation.latitude && geolocation.longitude) {
+      clubData.geolocation = {
+        latitude: geolocation.latitude,
+        longitude: geolocation.longitude,
+        placeName: geolocation.placeName,
+      };
+    }
+
+    const newClub = new Club(clubData);
 
     // 6. Create and add the creator as an admin member of this club
     const creatorMember = new Member({
@@ -181,6 +192,7 @@ async function getAllClubs(req, res) {
     clubName: club.clubName,
     description: club.description,
     location: club.location,
+    geolocation: club.geolocation,
     isPrivate: club.isPrivate,
     members: club.members,
     createdBy: club.createdBy,
