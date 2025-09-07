@@ -24,6 +24,22 @@ const clubSchema = new Schema(
       type: String,
       trim: true,
     },
+    geolocation: {
+      latitude: {
+        type: Number,
+        min: -90,
+        max: 90,
+      },
+      longitude: {
+        type: Number,
+        min: -180,
+        max: 180,
+      },
+      placeName: {
+        type: String,
+        trim: true,
+      },
+    },
     isPrivate: {
       type: Boolean,
       default: true,
@@ -61,5 +77,11 @@ const clubSchema = new Schema(
     timestamps: true,
   }
 );
+
+// Create a 2dsphere index for geospatial queries (if geolocation exists)
+clubSchema.index({
+  'geolocation.latitude': 1,
+  'geolocation.longitude': 1
+});
 
 export default mongoose.model('Club', clubSchema);

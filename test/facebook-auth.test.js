@@ -5,23 +5,16 @@ import axios from 'axios';
 import dotenv from 'dotenv';
 import { app, mongoose } from '../server.js';
 import User from '../models/UserModel.js';
+import { ensureConnection } from './setup.js';
 
 dotenv.config();
 
 describe('Facebook Authentication', function () {
   let axiosStub;
 
-  before(function (done) {
-    mongoose
-      .connect(process.env.MONGO_LOCAL_URI, {
-        useNewUrlParser: true,
-        useUnifiedTopology: true,
-      })
-      .then(() => {
-        console.log('MongoDB connected for testing');
-        done();
-      })
-      .catch(done);
+  before(async function () {
+    await ensureConnection();
+    console.log('MongoDB connected for testing');
   });
 
   // Connection cleanup handled by test runner

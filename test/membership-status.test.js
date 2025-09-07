@@ -140,8 +140,7 @@ describe('Club Membership Status API', () => {
       
       // Add user as regular member to the club
       const member = new Member({
-        name: memberUser.username,
-        email: memberUser.email,
+        user: memberUser._id,
         club: testClub._id,
         roles: ['member'],
       });
