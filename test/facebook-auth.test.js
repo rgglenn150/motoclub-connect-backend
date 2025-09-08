@@ -100,7 +100,8 @@ describe('Facebook Authentication', function () {
         })
         .expect(200);
 
-      expect(response.body.message).to.equal('Facebook login successful');
+      expect(response.body.message).to.include('Facebook login successful');
+      expect(response.body.message).to.include('Welcome back!');
       expect(response.body.token).to.be.a('string');
       expect(response.body.user.email).to.equal('existing@facebook.com');
     });
@@ -136,7 +137,8 @@ describe('Facebook Authentication', function () {
         })
         .expect(200);
 
-      expect(response.body.message).to.equal('Facebook login successful');
+      expect(response.body.message).to.include('Facebook login successful');
+      expect(response.body.message).to.include('Welcome back!');
 
       // Verify user was updated with Facebook info
       const updatedUser = await User.findById(user._id);
@@ -292,7 +294,7 @@ describe('Facebook Authentication', function () {
       expect(response.body.message).to.equal('Invalid Facebook access token');
     });
 
-    it('should require user registration if not found', async function () {
+    it('should auto-register new user if not found', async function () {
       const facebookResponse = {
         data: {
           id: 'fb_new_user',
@@ -309,11 +311,14 @@ describe('Facebook Authentication', function () {
         .send({
           accessToken: 'valid_facebook_token',
         })
-        .expect(404);
+        .expect(200);
 
-      expect(response.body.message).to.equal(
-        'User not found. Please register first.'
-      );
+      expect(response.body.message).to.include('Facebook login successful');
+      expect(response.body.message).to.include('Welcome to MotoClub Connect!');
+      expect(response.body.isNewUser).to.equal(true);
+      expect(response.body.user.email).to.equal('newuser@facebook.com');
+      expect(response.body.user.facebookId).to.equal('fb_new_user');
+      expect(response.body.user.username).to.equal('newuser'); // Should generate from first+last name
     });
   });
 

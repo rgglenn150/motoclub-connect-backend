@@ -42,9 +42,9 @@ describe('Facebook Authentication Integration', function () {
         accessToken: 'test_token',
       });
 
-      // Should get 404 for non-existent user, but API call should be made
+      // Should now get 200 for auto-registered user, API call should be made
       expect(axiosStub.calledOnce).to.be.true;
-      expect(response.status).to.be.oneOf([400, 404]); // Either validation error or user not found
+      expect(response.status).to.equal(200); // Auto-registration should succeed
     });
 
     it('should decode JWT tokens with correct payload structure', function () {
@@ -90,8 +90,9 @@ describe('Facebook Authentication Integration', function () {
           username: 'createtestuser',
         });
 
-      // Should get either success or validation error, but API call should be made
+      // Should get success, and API call should be made
       expect(axiosStub.calledOnce).to.be.true;
+      expect(response.status).to.equal(200);
 
       // Verify the Facebook Graph API was called with correct parameters
       const apiUrl = axiosStub.firstCall.args[0];
