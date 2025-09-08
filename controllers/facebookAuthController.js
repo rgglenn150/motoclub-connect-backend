@@ -1,6 +1,7 @@
 import User from '../models/UserModel.js';
 import jwt from 'jsonwebtoken';
 import axios from 'axios';
+import { processFacebookProfilePicture, shouldUpdateProfilePicture } from '../utils/facebookImageUtils.js';
 
 // Create JWT token (reusing pattern from authController.js)
 const createToken = (_id) =>
@@ -60,6 +61,7 @@ export const facebookLogin = async (req, res) => {
 
     // Check if user exists with Facebook ID
     let user = await User.findOne({ facebookId });
+    let isNewUser = false;
 
     if (!user) {
       // Check if user exists with email
@@ -69,24 +71,91 @@ export const facebookLogin = async (req, res) => {
         // Link Facebook account to existing user
         user.facebookId = facebookId;
         user.facebookEmail = email;
-        if (picture?.data?.url) {
-          user.profilePhoto = picture.data.url;
+        
+        // Process Facebook profile picture and upload to Cloudinary
+        if (picture?.data?.url && shouldUpdateProfilePicture(user.profilePhoto, picture.data.url)) {
+          try {
+            const cloudinaryUrl = await processFacebookProfilePicture(
+              picture.data.url,
+              user._id.toString(),
+              user.profilePhoto
+            );
+            user.profilePhoto = cloudinaryUrl;
+          } catch (error) {
+            console.error('Failed to process Facebook profile picture during account linking:', error.message);
+            // Keep existing profile photo or set Facebook URL as fallback
+            if (!user.profilePhoto) {
+              user.profilePhoto = picture.data.url;
+            }
+          }
         }
+        
         await user.save();
       } else if (user && user.facebookId && user.facebookId !== facebookId) {
         return res.status(400).json({
           message: 'Email already associated with a different Facebook account',
         });
       } else if (!user) {
-        return res.status(404).json({
-          message: 'User not found. Please register first.',
-        });
+        // Auto-register new user instead of returning error
+        let profilePhotoUrl = null;
+        if (picture?.data?.url) {
+          try {
+            // Create a temporary user ID for the image processing
+            const tempUserId = `temp_${facebookId}_${Date.now()}`;
+            profilePhotoUrl = await processFacebookProfilePicture(
+              picture.data.url,
+              tempUserId,
+              null // No existing image to cleanup for new registration
+            );
+          } catch (error) {
+            console.error('Failed to process Facebook profile picture during auto-registration:', error.message);
+            // Use original Facebook URL as fallback
+            profilePhotoUrl = picture.data.url;
+          }
+        }
+
+        // Use Facebook signup method from User model to auto-register
+        user = await User.facebookSignup(
+          facebookId,
+          email,
+          first_name,
+          last_name,
+          profilePhotoUrl,
+          null // No username provided, will be auto-generated
+        );
+        isNewUser = true;
+
+        // Update the Cloudinary image with the actual user ID if we uploaded to temp ID
+        if (profilePhotoUrl && profilePhotoUrl.includes('cloudinary.com') && profilePhotoUrl.includes('temp_')) {
+          try {
+            const actualProfilePhotoUrl = await processFacebookProfilePicture(
+              picture.data.url,
+              user._id.toString(),
+              profilePhotoUrl // This will cleanup the temp image
+            );
+            user.profilePhoto = actualProfilePhotoUrl;
+            await user.save();
+          } catch (error) {
+            console.error('Failed to update profile picture with actual user ID during auto-registration:', error.message);
+            // Keep the temp image URL - it still works
+          }
+        }
       }
     } else {
-      // User found with Facebook ID - update profile photo from Facebook data
-      if (picture?.data?.url) {
-        user.profilePhoto = picture.data.url;
-        await user.save();
+      // User found with Facebook ID - update profile photo from Facebook data if needed
+      if (picture?.data?.url && shouldUpdateProfilePicture(user.profilePhoto, picture.data.url)) {
+        try {
+          const cloudinaryUrl = await processFacebookProfilePicture(
+            picture.data.url,
+            user._id.toString(),
+            user.profilePhoto
+          );
+          user.profilePhoto = cloudinaryUrl;
+          await user.save();
+        } catch (error) {
+          console.error('Failed to process Facebook profile picture during login:', error.message);
+          // Don't update if processing fails, keep existing photo
+        }
       }
     }
 
@@ -98,10 +167,14 @@ export const facebookLogin = async (req, res) => {
     // Update session
     req.session.userId = user._id;
 
+    // Determine welcome message based on user status
+    const welcomeMessage = isNewUser ? 'Welcome to MotoClub Connect!' : 'Welcome back!';
+
     res.status(200).json({
-      message: 'Facebook login successful',
+      message: `Facebook login successful. ${welcomeMessage}`,
       token,
       user: userObject,
+      isNewUser: isNewUser,
     });
   } catch (error) {
     console.error('Facebook login error:', error);
@@ -139,8 +212,25 @@ export const facebookRegister = async (req, res) => {
       });
     }
 
+    // Process Facebook profile picture and upload to Cloudinary
+    let profilePhotoUrl = null;
+    if (picture?.data?.url) {
+      try {
+        // Create a temporary user ID for the image processing
+        const tempUserId = `temp_${facebookId}_${Date.now()}`;
+        profilePhotoUrl = await processFacebookProfilePicture(
+          picture.data.url,
+          tempUserId,
+          null // No existing image to cleanup for new registration
+        );
+      } catch (error) {
+        console.error('Failed to process Facebook profile picture during registration:', error.message);
+        // Use original Facebook URL as fallback
+        profilePhotoUrl = picture.data.url;
+      }
+    }
+
     // Use Facebook signup method from User model
-    const profilePhotoUrl = picture?.data?.url || null;
     const user = await User.facebookSignup(
       facebookId,
       email,
@@ -149,6 +239,22 @@ export const facebookRegister = async (req, res) => {
       profilePhotoUrl,
       username
     );
+
+    // Update the Cloudinary image with the actual user ID if we uploaded to temp ID
+    if (profilePhotoUrl && profilePhotoUrl.includes('cloudinary.com') && profilePhotoUrl.includes('temp_')) {
+      try {
+        const actualProfilePhotoUrl = await processFacebookProfilePicture(
+          picture.data.url,
+          user._id.toString(),
+          profilePhotoUrl // This will cleanup the temp image
+        );
+        user.profilePhoto = actualProfilePhotoUrl;
+        await user.save();
+      } catch (error) {
+        console.error('Failed to update profile picture with actual user ID:', error.message);
+        // Keep the temp image URL - it still works
+      }
+    }
 
     // Create JWT token
     const token = createToken(user._id);
