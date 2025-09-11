@@ -13,6 +13,8 @@ import {
   rejectJoinRequest,
   removeMember,
   getClubMembers,
+  promoteToAdmin,
+  demoteToMember,
 } from '../controllers/clubController.js';
 import authMiddleware from '../middlewares/authMiddleware.js';
 
@@ -46,5 +48,7 @@ router.post('/:clubId/join-requests/:requestId/reject', authMiddleware, rejectJo
 // Member management endpoints (admin only)
 router.get('/:clubId/members', authMiddleware, getClubMembers);
 router.delete('/:clubId/members/:memberId', authMiddleware, removeMember);
+router.post('/:clubId/members/:memberId/promote', authMiddleware, promoteToAdmin);
+router.post('/:clubId/members/:memberId/demote', authMiddleware, demoteToMember);
 
 export default router;

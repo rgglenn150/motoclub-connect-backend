@@ -25,6 +25,8 @@ export {
   rejectJoinRequest,
   removeMember,
   getClubMembers,
+  promoteToAdmin,
+  demoteToMember,
 };
 
 /**
@@ -764,6 +766,171 @@ async function removeMember(req, res) {
     });
   } catch (error) {
     console.error('Error removing member:', error);
+    return res.status(500).json({
+      message: 'Server error',
+      error: error?.message || error,
+    });
+  }
+}
+
+/**
+ * POST /api/club/:clubId/members/:memberId/promote - Promote member to admin (admin only)
+ */
+async function promoteToAdmin(req, res) {
+  try {
+    const { clubId, memberId } = req.params;
+    const userId = req.user._id;
+
+    // Validate IDs format
+    if (!clubId.match(/^[0-9a-fA-F]{24}$/) || !memberId.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({ message: 'Invalid ID format' });
+    }
+
+    // Verify club exists
+    const club = await Club.findById(clubId);
+    if (!club) {
+      return res.status(404).json({ message: 'Club not found' });
+    }
+
+    // Verify user is admin of this club
+    const adminCheck = await verifyClubAdmin(userId, clubId);
+    if (!adminCheck.isAdmin) {
+      return res.status(403).json({ message: adminCheck.error });
+    }
+
+    // Find the member to promote
+    const memberToPromote = await Member.findOne({
+      _id: memberId,
+      club: clubId
+    }).populate('user', 'username email firstName lastName profilePhoto');
+
+    if (!memberToPromote) {
+      return res.status(404).json({ message: 'Member not found in this club' });
+    }
+
+    // Check if member is already an admin
+    if (memberToPromote.roles.includes('admin')) {
+      return res.status(400).json({ message: 'Member is already an admin' });
+    }
+
+    // Promote member to admin by adding 'admin' role
+    memberToPromote.roles.push('admin');
+    await memberToPromote.save();
+
+    // Format the response to match what the frontend expects
+    const formattedMember = {
+      _id: memberToPromote._id,
+      user: {
+        _id: memberToPromote.user._id,
+        name: memberToPromote.user.username || `${memberToPromote.user.firstName} ${memberToPromote.user.lastName}`.trim() || 'Unnamed User',
+        email: memberToPromote.user.email,
+        username: memberToPromote.user.username,
+        firstName: memberToPromote.user.firstName,
+        lastName: memberToPromote.user.lastName,
+        profilePicture: memberToPromote.user.profilePhoto,
+      },
+      club: memberToPromote.club,
+      role: 'admin',
+      joinedAt: memberToPromote.joinedDate,
+    };
+
+    return res.status(200).json({
+      message: 'Member promoted to admin successfully',
+      member: formattedMember,
+    });
+  } catch (error) {
+    console.error('Error promoting member:', error);
+    return res.status(500).json({
+      message: 'Server error',
+      error: error?.message || error,
+    });
+  }
+}
+
+/**
+ * POST /api/club/:clubId/members/:memberId/demote - Demote admin to member (admin only)
+ */
+async function demoteToMember(req, res) {
+  try {
+    const { clubId, memberId } = req.params;
+    const userId = req.user._id;
+
+    // Validate IDs format
+    if (!clubId.match(/^[0-9a-fA-F]{24}$/) || !memberId.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({ message: 'Invalid ID format' });
+    }
+
+    // Verify club exists
+    const club = await Club.findById(clubId);
+    if (!club) {
+      return res.status(404).json({ message: 'Club not found' });
+    }
+
+    // Verify user is admin of this club
+    const adminCheck = await verifyClubAdmin(userId, clubId);
+    if (!adminCheck.isAdmin) {
+      return res.status(403).json({ message: adminCheck.error });
+    }
+
+    // Find the member to demote
+    const memberToDemote = await Member.findOne({
+      _id: memberId,
+      club: clubId
+    }).populate('user', 'username email firstName lastName profilePhoto');
+
+    if (!memberToDemote) {
+      return res.status(404).json({ message: 'Member not found in this club' });
+    }
+
+    // Check if member is actually an admin
+    if (!memberToDemote.roles.includes('admin')) {
+      return res.status(400).json({ message: 'Member is not an admin' });
+    }
+
+    // Prevent admin from demoting themselves (admin lockout prevention)
+    if (memberToDemote.user._id.toString() === userId.toString()) {
+      return res.status(400).json({ message: 'You cannot demote yourself' });
+    }
+
+    // Check if this is the only admin
+    const adminCount = await Member.countDocuments({
+      club: clubId,
+      roles: 'admin'
+    });
+
+    if (adminCount <= 1) {
+      return res.status(400).json({ 
+        message: 'Cannot demote the only admin. There must be at least one admin in the club.' 
+      });
+    }
+
+    // Demote admin to member by removing 'admin' role
+    memberToDemote.roles = memberToDemote.roles.filter(role => role !== 'admin');
+    await memberToDemote.save();
+
+    // Format the response to match what the frontend expects
+    const formattedMember = {
+      _id: memberToDemote._id,
+      user: {
+        _id: memberToDemote.user._id,
+        name: memberToDemote.user.username || `${memberToDemote.user.firstName} ${memberToDemote.user.lastName}`.trim() || 'Unnamed User',
+        email: memberToDemote.user.email,
+        username: memberToDemote.user.username,
+        firstName: memberToDemote.user.firstName,
+        lastName: memberToDemote.user.lastName,
+        profilePicture: memberToDemote.user.profilePhoto,
+      },
+      club: memberToDemote.club,
+      role: 'member',
+      joinedAt: memberToDemote.joinedDate,
+    };
+
+    return res.status(200).json({
+      message: 'Admin demoted to member successfully',
+      member: formattedMember,
+    });
+  } catch (error) {
+    console.error('Error demoting member:', error);
     return res.status(500).json({
       message: 'Server error',
       error: error?.message || error,
