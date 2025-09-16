@@ -3,6 +3,7 @@ import multer from 'multer';
 import {
   addMember,
   createClub,
+  updateClub,
   getAllClubs,
   getClubById,
   joinClub,
@@ -15,6 +16,7 @@ import {
   getClubMembers,
   promoteToAdmin,
   demoteToMember,
+  checkClubNameAvailability,
 } from '../controllers/clubController.js';
 import authMiddleware from '../middlewares/authMiddleware.js';
 
@@ -28,6 +30,7 @@ const upload = multer({
 
 router.post('/addMember', authMiddleware, addMember);
 router.post('/create', authMiddleware, createClub);
+router.put('/:clubId/update', authMiddleware, upload.single('logo'), updateClub);
 router.post('/:clubId/join', authMiddleware, joinClub);
 router.post(
   '/:clubId/logo',
@@ -38,6 +41,7 @@ router.post(
 
 router.get('/', getAllClubs);
 router.get('/:id', authMiddleware, getClubById);
+router.get('/check-name/:name', checkClubNameAvailability);
 router.get('/:clubId/membership-status', authMiddleware, getMembershipStatus);
 
 // Join request management endpoints (admin only)
