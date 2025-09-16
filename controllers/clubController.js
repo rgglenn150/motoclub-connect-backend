@@ -14,6 +14,7 @@ import {
 
 export {
   createClub,
+  updateClub,
   addMember,
   getAllClubs,
   getClubById,
@@ -27,6 +28,7 @@ export {
   getClubMembers,
   promoteToAdmin,
   demoteToMember,
+  checkClubNameAvailability,
 };
 
 /**
@@ -158,6 +160,193 @@ async function createClub(req, res) {
   }
 }
 
+/**
+ * PUT /api/club/:clubId/update - Update club details (admin only)
+ */
+async function updateClub(req, res) {
+  try {
+    const { clubId } = req.params;
+    const userId = req.user._id;
+
+    // Handle both JSON and FormData requests
+    let { clubName, name, description, location, isPrivate, geolocation } = req.body;
+
+    // Map 'name' to 'clubName' for backwards compatibility
+    if (name && !clubName) {
+      clubName = name;
+    }
+
+    // Handle FormData string conversion for isPrivate
+    if (typeof isPrivate === 'string') {
+      isPrivate = isPrivate.toLowerCase() === 'true';
+    }
+
+    // Handle FormData JSON string conversion for geolocation
+    if (typeof geolocation === 'string') {
+      try {
+        geolocation = JSON.parse(geolocation);
+      } catch (parseError) {
+        return res.status(400).json({
+          message: 'Invalid geolocation format',
+          error: 'Geolocation must be a valid JSON object'
+        });
+      }
+    }
+
+    // Validate clubId format
+    if (!clubId.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({ message: 'Invalid club ID format' });
+    }
+
+    // Verify club exists
+    const club = await Club.findById(clubId);
+    if (!club) {
+      return res.status(404).json({ message: 'Club not found' });
+    }
+
+    // Verify user is admin of this club
+    const adminCheck = await verifyClubAdmin(userId, clubId);
+    if (!adminCheck.isAdmin) {
+      return res.status(403).json({ message: adminCheck.error });
+    }
+
+    // Basic input validation
+    const validationErrors = [];
+
+    if (clubName && (typeof clubName !== 'string' || clubName.trim().length < 2 || clubName.trim().length > 100)) {
+      validationErrors.push({ field: 'clubName', message: 'Club name must be between 2 and 100 characters' });
+    }
+
+    if (description && (typeof description !== 'string' || description.trim().length < 10 || description.trim().length > 500)) {
+      validationErrors.push({ field: 'description', message: 'Description must be between 10 and 500 characters' });
+    }
+
+    if (location && (typeof location !== 'string' || location.trim().length > 200)) {
+      validationErrors.push({ field: 'location', message: 'Location must be less than 200 characters' });
+    }
+
+    if (isPrivate !== undefined && typeof isPrivate !== 'boolean') {
+      validationErrors.push({ field: 'isPrivate', message: 'isPrivate must be a boolean value' });
+    }
+
+    if (geolocation && geolocation.latitude !== undefined && geolocation.longitude !== undefined) {
+      if (typeof geolocation.latitude !== 'number' || geolocation.latitude < -90 || geolocation.latitude > 90) {
+        validationErrors.push({ field: 'geolocation.latitude', message: 'Latitude must be a number between -90 and 90' });
+      }
+      if (typeof geolocation.longitude !== 'number' || geolocation.longitude < -180 || geolocation.longitude > 180) {
+        validationErrors.push({ field: 'geolocation.longitude', message: 'Longitude must be a number between -180 and 180' });
+      }
+    }
+
+    if (validationErrors.length > 0) {
+      return res.status(400).json({
+        message: 'Validation errors',
+        errors: validationErrors,
+      });
+    }
+
+    // Build update object with only provided fields
+    const updateData = {};
+
+    // Handle club name update with uniqueness check
+    if (clubName && clubName !== club.clubName) {
+      const existingClub = await Club.findOne({
+        clubName: clubName,
+        _id: { $ne: clubId }, // Exclude current club from search
+      });
+      if (existingClub) {
+        return res.status(400).json({
+          message: 'A club with this name already exists.',
+        });
+      }
+      updateData.clubName = clubName;
+    }
+
+    // Handle other basic fields
+    if (description !== undefined) {
+      updateData.description = description;
+    }
+    if (location !== undefined) {
+      updateData.location = location;
+    }
+    if (isPrivate !== undefined) {
+      updateData.isPrivate = isPrivate;
+    }
+
+    // Handle geolocation data
+    if (geolocation) {
+      if (geolocation.latitude && geolocation.longitude) {
+        updateData.geolocation = {
+          latitude: geolocation.latitude,
+          longitude: geolocation.longitude,
+          placeName: geolocation.placeName || '',
+        };
+      } else if (geolocation === null || (geolocation.latitude === null && geolocation.longitude === null)) {
+        // Allow clearing geolocation data
+        updateData.$unset = { geolocation: 1 };
+      }
+    }
+
+    // Handle logo upload if provided
+    if (req.file) {
+      try {
+        // Convert buffer to data URI
+        const base64 = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
+
+        const uploadResult = await cloudinary.uploader.upload(base64, {
+          folder: 'motoclub-connect/clubs',
+          public_id: `club_${clubId}_logo`,
+          overwrite: true,
+          resource_type: 'image',
+          transformation: [{ width: 512, height: 512, crop: 'limit' }],
+        });
+
+        updateData.logoUrl = uploadResult.secure_url;
+        updateData.logoPublicId = uploadResult.public_id;
+      } catch (uploadError) {
+        console.error('Error uploading club logo:', uploadError);
+        return res.status(500).json({
+          message: 'Error uploading club logo',
+          error: uploadError?.message || uploadError,
+        });
+      }
+    }
+
+    // Perform the update
+    const updatedClub = await Club.findByIdAndUpdate(
+      clubId,
+      updateData,
+      { new: true, runValidators: true }
+    );
+
+    if (!updatedClub) {
+      return res.status(404).json({ message: 'Club not found after update' });
+    }
+
+    console.log('Club updated successfully:', updatedClub._id);
+
+    // Return updated club data directly (matches frontend expectations)
+    return res.status(200).json({
+      _id: updatedClub._id,
+      clubName: updatedClub.clubName,
+      description: updatedClub.description,
+      location: updatedClub.location || '',
+      isPrivate: updatedClub.isPrivate,
+      logoUrl: updatedClub.logoUrl,
+      geolocation: updatedClub.geolocation,
+      createdBy: updatedClub.createdBy,
+      createdAt: updatedClub.createdAt,
+      updatedAt: updatedClub.updatedAt,
+    });
+  } catch (error) {
+    console.error('Error updating club:', error);
+    return res.status(500).json({
+      message: 'Server error updating club',
+      error: error?.message || error,
+    });
+  }
+}
+
 async function addMember(req, res) {
   try {
     const { clubId, memberData } = req.body;
@@ -191,24 +380,39 @@ async function addMember(req, res) {
 }
 
 async function getAllClubs(req, res) {
-  const clubs = await Club.find();
-  const clubsWithId = clubs.map((club) => ({
-    id: club._id,
-    clubName: club.clubName,
-    description: club.description,
-    location: club.location,
-    geolocation: club.geolocation,
-    isPrivate: club.isPrivate,
-    members: club.members,
-    createdBy: club.createdBy,
-    createdAt: club.createdAt,
-    logoUrl: club.logoUrl,
-  }));
+  try {
+    const clubs = await Club.find();
+    console.log('Found clubs:', clubs.length);
 
-  res.status(200).json({
-    message: 'Get all clubs ',
-    clubs: clubsWithId,
-  });
+    const clubsWithId = clubs.map((club) => {
+      console.log('Processing club:', club._id, 'Name:', club.clubName);
+      return {
+        _id: club._id,
+        clubName: club.clubName,
+        description: club.description,
+        location: club.location || '',
+        geolocation: club.geolocation,
+        isPrivate: club.isPrivate,
+        members: club.members,
+        createdBy: club.createdBy,
+        createdAt: club.createdAt,
+        logoUrl: club.logoUrl,
+      };
+    });
+
+    console.log('Returning clubs with IDs:', clubsWithId.map(c => ({ id: c._id, name: c.clubName })));
+
+    res.status(200).json({
+      message: 'Clubs retrieved successfully',
+      clubs: clubsWithId,
+    });
+  } catch (error) {
+    console.error('Error getting all clubs:', error);
+    res.status(500).json({
+      message: 'Server error retrieving clubs',
+      error: error?.message || error,
+    });
+  }
 }
 
 async function getClubById(req, res) {
@@ -218,13 +422,36 @@ async function getClubById(req, res) {
       'username'
     );
     if (!club) {
-      return res.status(404).json({ msg: 'Club not found' });
+      return res.status(404).json({ message: 'Club not found' });
     }
-    console.log('rgdb club id : ', club);
-    res.json(club);
-  } catch (err) {
-    console.error(err.message);
-    res.status(500).send('Server Error');
+
+    // Ensure consistent response format with _id field
+    const clubData = {
+      _id: club._id,
+      clubName: club.clubName,
+      description: club.description,
+      location: club.location || '',
+      geolocation: club.geolocation,
+      isPrivate: club.isPrivate,
+      members: club.members,
+      createdBy: club.createdBy,
+      createdAt: club.createdAt,
+      updatedAt: club.updatedAt,
+      logoUrl: club.logoUrl,
+      joinRequests: club.joinRequests,
+    };
+
+    console.log('Returning club by ID:', clubData._id);
+    res.status(200).json({
+      message: 'Club retrieved successfully',
+      club: clubData,
+    });
+  } catch (error) {
+    console.error('Error getting club by ID:', error);
+    res.status(500).json({
+      message: 'Server error retrieving club',
+      error: error?.message || error,
+    });
   }
 }
 
@@ -934,6 +1161,48 @@ async function demoteToMember(req, res) {
     return res.status(500).json({
       message: 'Server error',
       error: error?.message || error,
+    });
+  }
+}
+
+/**
+ * GET /api/club/check-name/:name - Check if a club name is available
+ */
+async function checkClubNameAvailability(req, res) {
+  try {
+    const { name } = req.params;
+    const { excludeId } = req.query;
+
+    // Basic validation
+    if (!name || typeof name !== 'string' || name.trim().length < 2) {
+      return res.status(400).json({
+        message: 'Club name must be at least 2 characters long',
+        available: false,
+      });
+    }
+
+    // Build query to check for existing club with the same name
+    const query = { clubName: name.trim() };
+
+    // If excludeId is provided, exclude that club from the search (for editing)
+    if (excludeId && excludeId.match(/^[0-9a-fA-F]{24}$/)) {
+      query._id = { $ne: excludeId };
+    }
+
+    // Check if club with the same name already exists
+    const existingClub = await Club.findOne(query);
+
+    // Return availability status
+    return res.status(200).json({
+      available: !existingClub,
+      message: existingClub ? 'A club with this name already exists' : 'Club name is available',
+    });
+  } catch (error) {
+    console.error('Error checking club name availability:', error);
+    return res.status(500).json({
+      message: 'Server error checking club name availability',
+      error: error?.message || error,
+      available: false,
     });
   }
 }
