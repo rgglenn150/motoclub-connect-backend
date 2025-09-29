@@ -4,13 +4,19 @@ import JoinRequest from '../models/JoinRequest.js';
 import User from '../models/UserModel.js';
 import { validationResult } from 'express-validator';
 import cloudinary from '../utils/cloudinary.js';
-import { 
+import {
   createJoinRequestNotification,
   createRequestApprovedNotification,
   createRequestRejectedNotification,
   createNewMemberNotification,
   getClubAdmins,
 } from '../utils/notificationService.js';
+import {
+  buildNearQuery,
+  calculateDistance,
+  isValidCoordinates,
+  kmToMeters
+} from '../utils/geospatialUtils.js';
 
 export {
   createClub,
@@ -29,6 +35,7 @@ export {
   promoteToAdmin,
   demoteToMember,
   checkClubNameAvailability,
+  getNearbyClubs,
 };
 
 /**
@@ -1203,6 +1210,281 @@ async function checkClubNameAvailability(req, res) {
       message: 'Server error checking club name availability',
       error: error?.message || error,
       available: false,
+    });
+  }
+}
+
+/**
+ * GET /api/club/nearby - Get nearby clubs based on user's coordinates using MongoDB geospatial queries
+ */
+async function getNearbyClubs(req, res) {
+  try {
+    // Extract and validate query parameters
+    const { latitude, longitude, radius = 50, limit = 20, includePrivate = 'false' } = req.query;
+
+    console.log('Getting nearby clubs with params:', { latitude, longitude, radius, limit, includePrivate });
+
+    // Comprehensive input validation
+    const validationErrors = [];
+
+    // Validate required coordinates
+    if (!latitude || !longitude) {
+      validationErrors.push({ field: 'coordinates', message: 'Both latitude and longitude are required' });
+    }
+
+    // Validate coordinate values
+    const lat = parseFloat(latitude);
+    const lng = parseFloat(longitude);
+
+    if (isNaN(lat) || isNaN(lng)) {
+      validationErrors.push({ field: 'coordinates', message: 'Latitude and longitude must be valid numbers' });
+    } else if (!isValidCoordinates(lat, lng)) {
+      validationErrors.push({ field: 'coordinates', message: 'Invalid coordinate ranges' });
+    }
+
+    // Validate radius
+    const searchRadius = parseFloat(radius);
+    if (isNaN(searchRadius) || searchRadius <= 0 || searchRadius > 500) {
+      validationErrors.push({ field: 'radius', message: 'Radius must be a number between 0 and 500 km' });
+    }
+
+    // Validate limit
+    const resultLimit = parseInt(limit);
+    if (isNaN(resultLimit) || resultLimit <= 0 || resultLimit > 100) {
+      validationErrors.push({ field: 'limit', message: 'Limit must be a number between 1 and 100' });
+    }
+
+    // Return validation errors if any
+    if (validationErrors.length > 0) {
+      return res.status(400).json({
+        message: 'Validation errors in query parameters',
+        errors: validationErrors,
+      });
+    }
+
+    // Parse includePrivate flag
+    const includePrivateClubs = includePrivate === 'true';
+
+    // Convert radius from kilometers to meters for MongoDB geospatial query
+    const maxDistanceMeters = kmToMeters(searchRadius);
+
+    // Build the geospatial query using MongoDB's native $near operator
+    const geoQuery = buildNearQuery(lat, lng, maxDistanceMeters);
+
+    // Build the match criteria
+    const matchCriteria = {
+      geoPoint: geoQuery,
+      // Include private club filter
+      ...(includePrivateClubs ? {} : { isPrivate: { $ne: true } })
+    };
+
+    console.log('Geospatial query:', JSON.stringify(matchCriteria, null, 2));
+
+    try {
+      // Primary query: Use MongoDB's native geospatial capabilities
+      const clubs = await Club.find(matchCriteria)
+        .limit(resultLimit)
+        .select('_id clubName description location geolocation geoPoint isPrivate logoUrl members createdAt')
+        .lean()
+        .maxTimeMS(10000);
+
+      console.log(`Found ${clubs.length} clubs using native geospatial query`);
+
+      // If no clubs found with native query, try fallback method
+      if (clubs.length === 0) {
+        console.log('No clubs found with native query, trying fallback method...');
+        throw new Error('No results from native query, fallback required');
+      }
+
+      // Calculate accurate distances and add member count
+      const clubsWithDistance = clubs.map(club => {
+        let distance = 0;
+        let memberCount = 0;
+
+        // Calculate distance using Haversine formula for accuracy
+        if (club.geoPoint && club.geoPoint.coordinates) {
+          const [clubLng, clubLat] = club.geoPoint.coordinates;
+          distance = calculateDistance(lat, lng, clubLat, clubLng);
+        } else if (club.geolocation) {
+          // Fallback to legacy geolocation format
+          distance = calculateDistance(lat, lng, club.geolocation.latitude, club.geolocation.longitude);
+        }
+
+        // Calculate member count
+        if (Array.isArray(club.members)) {
+          memberCount = club.members.length;
+        }
+
+        return {
+          _id: club._id,
+          clubName: club.clubName,
+          description: club.description,
+          location: club.location || '',
+          geolocation: club.geolocation,
+          isPrivate: club.isPrivate || false,
+          logoUrl: club.logoUrl || null,
+          memberCount: memberCount,
+          distance: Math.round(distance * 100) / 100, // Round to 2 decimal places
+          createdAt: club.createdAt,
+        };
+      });
+
+      // Sort by distance (closest first) since $near should already do this, but ensure it
+      clubsWithDistance.sort((a, b) => a.distance - b.distance);
+
+      // Prepare response
+      const response = {
+        message: 'Nearby clubs retrieved successfully',
+        clubs: clubsWithDistance,
+        total: clubsWithDistance.length,
+        searchRadius: searchRadius,
+        userLocation: {
+          latitude: lat,
+          longitude: lng
+        },
+        queryMethod: 'native_geospatial'
+      };
+
+      return res.status(200).json(response);
+
+    } catch (geoError) {
+      console.warn('Native geospatial query failed, falling back to legacy method:', geoError);
+
+      // Fallback: Use legacy geolocation field with aggregation pipeline
+      const fallbackPipeline = [
+        // Match clubs with legacy geolocation data and privacy settings
+        {
+          $match: {
+            geolocation: { $exists: true, $ne: null },
+            'geolocation.latitude': { $exists: true, $ne: null },
+            'geolocation.longitude': { $exists: true, $ne: null },
+            ...(includePrivateClubs ? {} : { isPrivate: { $ne: true } })
+          }
+        },
+        // Add accurate distance calculation using Haversine formula
+        {
+          $addFields: {
+            distance: {
+              $let: {
+                vars: {
+                  dLat: { $degreesToRadians: { $subtract: ['$geolocation.latitude', lat] } },
+                  dLng: { $degreesToRadians: { $subtract: ['$geolocation.longitude', lng] } },
+                  lat1: { $degreesToRadians: lat },
+                  lat2: { $degreesToRadians: '$geolocation.latitude' }
+                },
+                in: {
+                  $multiply: [
+                    6371, // Earth's radius in kilometers
+                    {
+                      $multiply: [
+                        2,
+                        {
+                          $asin: {
+                            $sqrt: {
+                              $add: [
+                                { $pow: [{ $sin: { $divide: ['$$dLat', 2] } }, 2] },
+                                {
+                                  $multiply: [
+                                    { $cos: '$$lat1' },
+                                    { $cos: '$$lat2' },
+                                    { $pow: [{ $sin: { $divide: ['$$dLng', 2] } }, 2] }
+                                  ]
+                                }
+                              ]
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            },
+            memberCount: { $size: '$members' }
+          }
+        },
+        // Filter by distance (within search radius)
+        {
+          $match: {
+            distance: { $lte: searchRadius }
+          }
+        },
+        // Sort by distance (closest first)
+        {
+          $sort: { distance: 1 }
+        },
+        // Limit results
+        { $limit: resultLimit },
+        // Project only required fields
+        {
+          $project: {
+            _id: 1,
+            clubName: 1,
+            description: 1,
+            location: 1,
+            geolocation: 1,
+            isPrivate: 1,
+            logoUrl: 1,
+            memberCount: 1,
+            distance: 1,
+            createdAt: 1,
+          }
+        }
+      ];
+
+      const fallbackClubs = await Club.aggregate(fallbackPipeline, { maxTimeMS: 10000 });
+
+      console.log(`Fallback query found ${fallbackClubs.length} nearby clubs within ${searchRadius}km`);
+
+      const response = {
+        message: 'Nearby clubs retrieved successfully',
+        clubs: fallbackClubs.map(club => ({
+          _id: club._id,
+          clubName: club.clubName,
+          description: club.description,
+          location: club.location || '',
+          geolocation: club.geolocation,
+          isPrivate: club.isPrivate || false,
+          logoUrl: club.logoUrl || null,
+          memberCount: club.memberCount || 0,
+          distance: Math.round(club.distance * 100) / 100,
+          createdAt: club.createdAt,
+        })),
+        total: fallbackClubs.length,
+        searchRadius: searchRadius,
+        userLocation: {
+          latitude: lat,
+          longitude: lng
+        },
+        queryMethod: 'fallback_aggregation'
+      };
+
+      return res.status(200).json(response);
+    }
+
+  } catch (error) {
+    console.error('Error getting nearby clubs:', error);
+
+    // Handle specific MongoDB errors
+    if (error.name === 'MongooseError' || error.name === 'MongoError') {
+      return res.status(500).json({
+        message: 'Database error while searching for nearby clubs',
+        error: 'Please try again later',
+      });
+    }
+
+    // Handle timeout errors
+    if (error.code === 50 || error.message?.includes('timeout')) {
+      return res.status(504).json({
+        message: 'Search timeout - please try again with a smaller search radius',
+        error: 'Query timeout',
+      });
+    }
+
+    // General error response
+    return res.status(500).json({
+      message: 'Server error while searching for nearby clubs',
+      error: error?.message || 'Internal server error',
     });
   }
 }

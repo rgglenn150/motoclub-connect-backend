@@ -17,6 +17,7 @@ import {
   promoteToAdmin,
   demoteToMember,
   checkClubNameAvailability,
+  getNearbyClubs,
 } from '../controllers/clubController.js';
 import authMiddleware from '../middlewares/authMiddleware.js';
 
@@ -40,8 +41,9 @@ router.post(
 );
 
 router.get('/', getAllClubs);
-router.get('/:id', authMiddleware, getClubById);
+router.get('/nearby', getNearbyClubs);
 router.get('/check-name/:name', checkClubNameAvailability);
+router.get('/:id', authMiddleware, getClubById);
 router.get('/:clubId/membership-status', authMiddleware, getMembershipStatus);
 
 // Join request management endpoints (admin only)
