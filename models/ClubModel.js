@@ -19,11 +19,12 @@ const clubSchema = new Schema(
       required: true,
       trim: true,
     },
-    // Added missing fields to match the data being sent from the frontend
+    // Text location description
     location: {
       type: String,
       trim: true,
     },
+    // Legacy geolocation format (kept for backward compatibility)
     geolocation: {
       latitude: {
         type: Number,
@@ -39,6 +40,25 @@ const clubSchema = new Schema(
         type: String,
         trim: true,
       },
+    },
+    // New GeoJSON format for efficient geospatial queries
+    geoPoint: {
+      type: {
+        type: String,
+        enum: ['Point'],
+        default: 'Point'
+      },
+      coordinates: {
+        type: [Number], // [longitude, latitude]
+        validate: {
+          validator: function(coords) {
+            return coords.length === 2 &&
+              coords[0] >= -180 && coords[0] <= 180 && // longitude
+              coords[1] >= -90 && coords[1] <= 90;     // latitude
+          },
+          message: 'Coordinates must be [longitude, latitude] with valid ranges'
+        }
+      }
     },
     isPrivate: {
       type: Boolean,
@@ -78,10 +98,77 @@ const clubSchema = new Schema(
   }
 );
 
-// Create a 2dsphere index for geospatial queries (if geolocation exists)
-clubSchema.index({
-  'geolocation.latitude': 1,
-  'geolocation.longitude': 1
+// Pre-save middleware to sync geolocation data between legacy and GeoJSON formats
+clubSchema.pre('save', function(next) {
+  // If legacy geolocation exists and has valid coordinates
+  if (this.geolocation &&
+      typeof this.geolocation.latitude === 'number' &&
+      typeof this.geolocation.longitude === 'number' &&
+      this.geolocation.latitude >= -90 && this.geolocation.latitude <= 90 &&
+      this.geolocation.longitude >= -180 && this.geolocation.longitude <= 180) {
+
+    // Create or update geoPoint from legacy geolocation
+    this.geoPoint = {
+      type: 'Point',
+      coordinates: [this.geolocation.longitude, this.geolocation.latitude]
+    };
+  } else if (this.geoPoint &&
+             this.geoPoint.coordinates &&
+             Array.isArray(this.geoPoint.coordinates) &&
+             this.geoPoint.coordinates.length === 2) {
+
+    // Create or update legacy geolocation from geoPoint
+    const [longitude, latitude] = this.geoPoint.coordinates;
+    if (!this.geolocation) {
+      this.geolocation = {};
+    }
+    this.geolocation.latitude = latitude;
+    this.geolocation.longitude = longitude;
+  }
+
+  next();
 });
+
+// Pre-update middleware to sync geolocation data for updates
+clubSchema.pre(['updateOne', 'findOneAndUpdate'], function(next) {
+  const update = this.getUpdate();
+
+  // Handle $set operations
+  if (update.$set) {
+    // If updating legacy geolocation, sync to geoPoint
+    if (update.$set.geolocation &&
+        update.$set.geolocation.latitude &&
+        update.$set.geolocation.longitude) {
+      update.$set.geoPoint = {
+        type: 'Point',
+        coordinates: [update.$set.geolocation.longitude, update.$set.geolocation.latitude]
+      };
+    }
+
+    // If updating geoPoint, sync to legacy geolocation
+    if (update.$set.geoPoint &&
+        update.$set.geoPoint.coordinates &&
+        Array.isArray(update.$set.geoPoint.coordinates) &&
+        update.$set.geoPoint.coordinates.length === 2) {
+      const [longitude, latitude] = update.$set.geoPoint.coordinates;
+      update.$set['geolocation.latitude'] = latitude;
+      update.$set['geolocation.longitude'] = longitude;
+    }
+  }
+
+  next();
+});
+
+// Create a 2dsphere index for efficient geospatial queries
+clubSchema.index({ 'geoPoint': '2dsphere' });
+
+// Additional compound indexes for performance optimization
+clubSchema.index({
+  'isPrivate': 1,
+  'geoPoint': '2dsphere'
+});
+
+// Legacy index for backward compatibility (keep until data migration is complete)
+clubSchema.index({ 'geolocation': '2dsphere' });
 
 export default mongoose.model('Club', clubSchema);
