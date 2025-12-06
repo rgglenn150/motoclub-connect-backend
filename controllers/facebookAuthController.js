@@ -11,7 +11,7 @@ const createToken = (_id) =>
     },
     process.env.JWT_SECRET,
     {
-      expiresIn: '3d',
+      expiresIn: '30d',
     }
   );
 
