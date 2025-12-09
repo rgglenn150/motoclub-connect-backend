@@ -104,7 +104,9 @@ async function createClub(req, res) {
   }
 
   // 2. Destructure sanitized data from the request body
-  const { name, description, location, isPrivate, geolocation } = req.body;
+  // Accept both 'name' and 'clubName' for backwards compatibility
+  const { name, clubName, description, location, isPrivate, geolocation } = req.body;
+  const finalClubName = clubName || name; // Prefer clubName, fallback to name
 
   try {
     // 3. Get the full user data to access email and username
@@ -115,7 +117,7 @@ async function createClub(req, res) {
 
     // 4. Check if a club with the same name already exists
     const existingClub = await Club.findOne({
-      clubName: name,
+      clubName: finalClubName,
     });
     if (existingClub) {
       return res.status(400).json({
@@ -125,7 +127,7 @@ async function createClub(req, res) {
 
     // 5. Create a new Club instance without any initial members
     const clubData = {
-      clubName: name, // Use 'name' from body for 'clubName' field
+      clubName: finalClubName, // Use 'clubName' from body (or 'name' as fallback)
       description,
       location,
       isPrivate,
