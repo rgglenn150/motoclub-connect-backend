@@ -168,7 +168,8 @@ clubSchema.index({
   'geoPoint': '2dsphere'
 });
 
-// Legacy index for backward compatibility (keep until data migration is complete)
-clubSchema.index({ 'geolocation': '2dsphere' });
+// Note: Legacy 'geolocation' field is NOT indexed as 2dsphere because it's not in GeoJSON format.
+// The geoPoint field is used for all geospatial queries and is properly indexed.
+// The legacy geolocation field is kept only for backward compatibility.
 
 export default mongoose.model('Club', clubSchema);
