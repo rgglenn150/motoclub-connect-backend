@@ -19,7 +19,7 @@ const eventSchema = new Schema(
     },
     endTime: {
       type: Date,
-      required: true,
+      required: false, // End time is optional
     },
     location: {
       type: String,
