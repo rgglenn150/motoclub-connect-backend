@@ -46,6 +46,10 @@ const eventSchema = new Schema(
       enum: ['ride', 'meeting', 'meetup', 'event'],
       default: 'event',
     },
+    isPrivate: {
+      type: Boolean,
+      default: true,
+    },
     club: {
       type: Schema.Types.ObjectId,
       ref: 'Club',
