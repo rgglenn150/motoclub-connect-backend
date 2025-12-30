@@ -4,6 +4,7 @@ import {
   createEvent,
   getAllEvents,
   getEventsByClub,
+  getMyClubEvents,
   uploadEventImage,
 } from '../controllers/eventController.js';
 import authMiddleware from '../middlewares/authMiddleware.js';
@@ -25,6 +26,7 @@ router.post(
 );
 
 router.get('/', authMiddleware, getAllEvents);
+router.get('/my-clubs', authMiddleware, getMyClubEvents);
 router.get('/club/:clubId', authMiddleware, getEventsByClub);
 
 export default router;

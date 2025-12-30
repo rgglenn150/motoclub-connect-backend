@@ -1,4 +1,5 @@
 import Event from '../models/EventModel.js';
+import Member from '../models/MemberModel.js';
 import { validationResult } from 'express-validator';
 import cloudinary from '../utils/cloudinary.js';
 import sharp from 'sharp';
@@ -9,7 +10,7 @@ export async function createEvent(req, res) {
     return res.status(400).json({ errors: errors.array() });
   }
 
-  const { name, description, startTime, endTime, location, geolocation, eventType, club, imageUrl, imagePublicId } =
+  const { name, description, startTime, endTime, location, geolocation, eventType, club, imageUrl, imagePublicId, isPrivate } =
     req.body;
   console.log('Creating event with data:', req.body);
   try {
@@ -39,6 +40,7 @@ export async function createEvent(req, res) {
       createdBy: req.user._id,
       ...(imageUrl && { imageUrl }),
       ...(imagePublicId && { imagePublicId }),
+      ...(isPrivate !== undefined && { isPrivate }),
     });
 
     await newEvent.save();
@@ -71,6 +73,46 @@ export async function getEventsByClub(req, res) {
   } catch (err) {
     console.error(err.message);
     res.status(500).send('Server Error');
+  }
+}
+
+/**
+ * Get all events from clubs that the authenticated user is a member of.
+ * Requires authentication via authMiddleware.
+ * Returns events sorted by startTime (ascending - upcoming events first).
+ */
+export async function getMyClubEvents(req, res) {
+  try {
+    // Get authenticated user ID from middleware
+    const userId = req.user._id;
+
+    // Find all clubs where the user is a member
+    const memberships = await Member.find({ user: userId });
+
+    // If user is not a member of any clubs, return empty array
+    if (!memberships || memberships.length === 0) {
+      return res.status(200).json([]);
+    }
+
+    // Extract club IDs from memberships
+    const clubIds = memberships.map((membership) => membership.club);
+
+    // Find all events from those clubs
+    const events = await Event.find({
+      club: { $in: clubIds },
+      isPrivate: false  // Only show public events
+    })
+      .populate('club', 'clubName')
+      .populate('createdBy', 'username')
+      .sort({ startTime: 1 });
+
+    res.status(200).json(events);
+  } catch (err) {
+    console.error('Error fetching my club events:', err.message);
+    res.status(500).json({
+      message: 'Server Error',
+      error: err.message
+    });
   }
 }
 
