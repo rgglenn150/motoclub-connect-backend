@@ -8,6 +8,8 @@ import {
   checkUsernameAvailability,
   checkEmailAvailability,
   uploadProfilePhoto,
+  getUserLocation,
+  updateUserLocation,
   updateUser, // Legacy - deprecated
 } from '../controllers/userController.js';
 import User from '../models/UserModel.js';
@@ -36,6 +38,12 @@ router.get('/check-username/:username', authMiddleware, checkUsernameAvailabilit
 
 // Check email availability
 router.get('/check-email/:email', authMiddleware, checkEmailAvailability);
+
+// Get user's saved location
+router.get('/me/location', authMiddleware, getUserLocation);
+
+// Update user's location
+router.put('/me/location', authMiddleware, updateUserLocation);
 
 // Upload profile photo
 router.post(
