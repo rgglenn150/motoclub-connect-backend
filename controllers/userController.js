@@ -260,10 +260,88 @@ export const checkEmailAvailability = async (req, res) => {
   }
 };
 
+// Get user's saved location
+export const getUserLocation = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id).select('lastLocation');
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    if (!user.lastLocation || user.lastLocation.latitude === undefined || user.lastLocation.longitude === undefined) {
+      return res.status(404).json({ message: 'No location saved' });
+    }
+
+    res.status(200).json({
+      latitude: user.lastLocation.latitude,
+      longitude: user.lastLocation.longitude,
+      updatedAt: user.lastLocation.updatedAt,
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// Update user's location
+export const updateUserLocation = async (req, res) => {
+  try {
+    const { latitude, longitude } = req.body;
+
+    // Validate that both latitude and longitude are provided
+    if (latitude === undefined || longitude === undefined) {
+      return res.status(400).json({ message: 'Latitude and longitude are required' });
+    }
+
+    // Validate that they are numbers
+    const lat = parseFloat(latitude);
+    const lng = parseFloat(longitude);
+
+    if (isNaN(lat) || isNaN(lng)) {
+      return res.status(400).json({ message: 'Latitude and longitude must be valid numbers' });
+    }
+
+    // Validate latitude range (-90 to 90)
+    if (lat < -90 || lat > 90) {
+      return res.status(400).json({ message: 'Latitude must be between -90 and 90' });
+    }
+
+    // Validate longitude range (-180 to 180)
+    if (lng < -180 || lng > 180) {
+      return res.status(400).json({ message: 'Longitude must be between -180 and 180' });
+    }
+
+    const updatedAt = new Date();
+
+    const user = await User.findByIdAndUpdate(
+      req.user._id,
+      {
+        lastLocation: {
+          latitude: lat,
+          longitude: lng,
+          updatedAt: updatedAt,
+        },
+      },
+      { new: true }
+    ).select('lastLocation');
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    res.status(200).json({
+      latitude: user.lastLocation.latitude,
+      longitude: user.lastLocation.longitude,
+      updatedAt: user.lastLocation.updatedAt,
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 // Legacy method - DEPRECATED - DO NOT USE
 // This method has mass assignment vulnerability
 export const updateUser = async (req, res) => {
-  return res.status(410).json({ 
-    message: 'This endpoint is deprecated due to security vulnerabilities. Use specific endpoints like /me/profile, /me/username, or /me/email instead.' 
+  return res.status(410).json({
+    message: 'This endpoint is deprecated due to security vulnerabilities. Use specific endpoints like /me/profile, /me/username, or /me/email instead.'
   });
 };
