@@ -426,10 +426,15 @@ async function getAllClubs(req, res) {
 
 async function getClubById(req, res) {
   try {
-    const club = await Club.findById(req.params.id).populate(
-      'members',
-      'username'
-    );
+    // Populate members with nested user data for proper display
+    const club = await Club.findById(req.params.id)
+      .populate({
+        path: 'members',
+        populate: {
+          path: 'user',
+          select: 'username email firstName lastName profilePhoto'
+        }
+      });
     if (!club) {
       return res.status(404).json({ message: 'Club not found' });
     }
@@ -451,6 +456,8 @@ async function getClubById(req, res) {
     };
 
     console.log('Returning club by ID:', clubData._id);
+    console.log('Members count:', clubData.members?.length);
+    console.log('First member (if any):', clubData.members?.[0]);
     res.status(200).json({
       message: 'Club retrieved successfully',
       club: clubData,
