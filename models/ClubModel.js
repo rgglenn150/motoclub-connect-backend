@@ -91,6 +91,19 @@ const clubSchema = new Schema(
       type: String,
       default: undefined,
     },
+    // Visibility settings for official members
+    officialMembersVisibility: {
+      type: String,
+      enum: ['public', 'members', 'admins'],
+      default: 'members',
+    },
+    // Array of official members (similar structure to members array)
+    officialMembers: [
+      {
+        type: Schema.Types.ObjectId,
+        ref: 'OfficialMember',
+      },
+    ],
   },
   {
     // Automatically adds createdAt and updatedAt fields
