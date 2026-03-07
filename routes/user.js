@@ -1,15 +1,59 @@
 import express from 'express';
-import { getUser, updateUser, uploadProfilePhoto } from '../controllers/userController.js';
+import {
+  getUser,
+  getCurrentUser,
+  updateProfile,
+  updateUsername,
+  updateEmail,
+  checkUsernameAvailability,
+  checkEmailAvailability,
+  uploadProfilePhoto,
+  getUserLocation,
+  updateUserLocation,
+  updateUser, // Legacy - deprecated
+} from '../controllers/userController.js';
 import User from '../models/UserModel.js';
 import upload from '../middlewares/upload.js';
 import authMiddleware from '../middlewares/authMiddleware.js';
 
-
 const router = express.Router();
 
-router.get('/',authMiddleware, getUser);
-router.put('/:id',authMiddleware,updateUser);
-router.post('/profile-photo', authMiddleware, upload.single('profilePhoto'), uploadProfilePhoto);
+// Get all users (admin functionality)
+router.get('/', authMiddleware, getUser);
 
+// Get current authenticated user's profile
+router.get('/me', authMiddleware, getCurrentUser);
+
+// Update non-sensitive profile fields
+router.put('/me/profile', authMiddleware, updateProfile);
+
+// Update username with password confirmation
+router.put('/me/username', authMiddleware, updateUsername);
+
+// Update email with password confirmation
+router.put('/me/email', authMiddleware, updateEmail);
+
+// Check username availability
+router.get('/check-username/:username', authMiddleware, checkUsernameAvailability);
+
+// Check email availability
+router.get('/check-email/:email', authMiddleware, checkEmailAvailability);
+
+// Get user's saved location
+router.get('/me/location', authMiddleware, getUserLocation);
+
+// Update user's location
+router.put('/me/location', authMiddleware, updateUserLocation);
+
+// Upload profile photo
+router.post(
+  '/profile-photo',
+  authMiddleware,
+  upload.single('profilePhoto'),
+  uploadProfilePhoto
+);
+
+// DEPRECATED: Legacy update user endpoint - disabled for security
+router.put('/:id', authMiddleware, updateUser);
 
 export default router;

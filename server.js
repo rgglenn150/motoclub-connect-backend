@@ -6,6 +6,8 @@ import userRoutes from './routes/user.js';
 import authRoutes from './routes/auth.js';
 import clubRoutes from './routes/club.js';
 import eventRoutes from './routes/event.js';
+import notificationRoutes from './routes/notification.js';
+import officialMemberRouter from './routes/official-member.js';
 import cors from 'cors';
 
 dotenv.config();
@@ -42,10 +44,11 @@ app.use('/api/user', userRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/club', clubRoutes);
 app.use('/api/event', eventRoutes);
+app.use('/api/notifications', notificationRoutes);
+app.use('/api/official-member', officialMemberRouter);
 app.get('/api/wakeup', (req, res) => {
   res.json({ message: 'Server is awake and ready.' });
 });
-
 
 export default app;
 
@@ -55,7 +58,9 @@ console.log('NODE_ENV:', process.env.NODE_ENV);
 
 // Test environment - don't auto-connect or start server
 if (process.env.NODE_ENV === 'test') {
-  console.log('Test environment detected - database connection will be handled by tests');
+  console.log(
+    'Test environment detected - database connection will be handled by tests'
+  );
 }
 // Development environment
 else if (process.env.NODE_ENV === 'development') {
@@ -90,8 +95,4 @@ else {
       console.log('Error:', err);
     });
 }
-export {
-  app,
-  mongoose,
-  server
-};
+export { app, mongoose, server };

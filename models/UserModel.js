@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 import bcrypt from 'bcrypt';
 import validator from 'validator';
+import crypto from 'crypto';
 
 const userSchema = new mongoose.Schema(
   {
@@ -11,7 +12,7 @@ const userSchema = new mongoose.Schema(
     },
     password: {
       type: String,
-      required: function() {
+      required: function () {
         return !this.facebookId; // Password not required if user has Facebook ID
       },
     },
@@ -29,20 +30,31 @@ const userSchema = new mongoose.Schema(
     role: {
       type: String,
       enum: ['user', 'admin'],
-      default: 'user'
+      default: 'user',
     },
     profilePhoto: {
-      type: String
+      type: String,
     },
     facebookId: {
       type: String,
       unique: true,
-      sparse: true
+      sparse: true,
     },
     facebookEmail: {
       type: String,
-      sparse: true
-    }
+      sparse: true,
+    },
+    lastLocation: {
+      latitude: {
+        type: Number,
+      },
+      longitude: {
+        type: Number,
+      },
+      updatedAt: {
+        type: Date,
+      },
+    },
   },
   {
     timestamps: true,
@@ -94,10 +106,17 @@ userSchema.static(
 // Static method for Facebook signup
 userSchema.static(
   'facebookSignup',
-  async function (facebookId, email, firstName, lastName, profilePhoto, username) {
+  async function (
+    facebookId,
+    email,
+    firstName,
+    lastName,
+    profilePhoto,
+    username
+  ) {
     // Check if user exists with Facebook ID
     let user = await this.findOne({ facebookId });
-    
+
     if (user) {
       return user;
     }
@@ -118,14 +137,27 @@ userSchema.static(
     }
 
     // Create new user with Facebook data
-    let generatedUsername = username || `fb_${facebookId}_${Date.now()}`;
-    
-    // Ensure username is unique
-    const existingUsernameUser = await this.findOne({ username: generatedUsername });
-    if (existingUsernameUser) {
-      generatedUsername = `fb_${facebookId}_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+    let generatedUsername = username;
+
+    if (!generatedUsername) {
+      // Generate username using improved strategy
+      generatedUsername = await this.generateUniqueUsername(firstName, lastName);
     }
-    
+
+    // Check if username already exists
+    const existingUsernameUser = await this.findOne({
+      username: generatedUsername,
+    });
+    if (existingUsernameUser) {
+      if (username) {
+        // If username was explicitly provided and already exists, throw error
+        throw new Error('Username already exists');
+      } else {
+        // If username was auto-generated but still conflicts, regenerate
+        generatedUsername = await this.generateUniqueUsername(firstName, lastName);
+      }
+    }
+
     user = await this.create({
       facebookId,
       email,
@@ -138,6 +170,50 @@ userSchema.static(
     });
 
     return user;
+  }
+);
+
+// Static method for generating unique usernames with improved strategy
+userSchema.static(
+  'generateUniqueUsername',
+  async function (firstName, lastName) {
+    const cleanName = (name) => (name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const cleanFirstName = cleanName(firstName);
+    const cleanLastName = cleanName(lastName);
+    
+    // Strategy 1: Try firstName + lastName (clean, if unique)
+    if (cleanFirstName && cleanLastName) {
+      const baseUsername = `${cleanFirstName}${cleanLastName}`;
+      const existingUser = await this.findOne({ username: baseUsername });
+      if (!existingUser) {
+        return baseUsername;
+      }
+      
+      // Strategy 2: Try firstName + lastName + 4 random digits
+      for (let attempts = 0; attempts < 5; attempts++) {
+        const randomDigits = crypto.randomInt(1000, 9999); // 4 digit number
+        const usernameWithDigits = `${baseUsername}${randomDigits}`;
+        const existingUserWithDigits = await this.findOne({ username: usernameWithDigits });
+        if (!existingUserWithDigits) {
+          return usernameWithDigits;
+        }
+      }
+    }
+    
+    // Strategy 3: If no name data or all attempts failed, use fbuser_timestamp_3randomchars
+    const timestamp = Date.now();
+    const randomChars = crypto.randomBytes(2).toString('hex').substring(0, 3); // 3 random characters
+    const fallbackUsername = `fbuser_${timestamp}_${randomChars}`;
+    
+    // Double-check uniqueness of fallback (should be virtually impossible to conflict)
+    const existingFallback = await this.findOne({ username: fallbackUsername });
+    if (existingFallback) {
+      // If by some miracle this conflicts, add more randomness
+      const extraRandom = crypto.randomBytes(2).toString('hex');
+      return `fbuser_${timestamp}_${randomChars}_${extraRandom}`;
+    }
+    
+    return fallbackUsername;
   }
 );
 

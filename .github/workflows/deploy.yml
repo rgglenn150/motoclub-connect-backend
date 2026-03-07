@@ -1,0 +1,40 @@
+name: Deploy to Hetzner
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to Server via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SERVER_IP }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            # 1. Go to the project folder
+            cd /home/pspipes/motoclub-connect-backend
+            
+            # 2. Pull the latest code
+            git pull origin master
+            
+            # 3. Rebuild the Image (Clean Build)
+            docker build -t moto-backend .
+            
+            # 4. Stop and Remove the old container (ignore errors if it doesn't exist)
+            docker stop moto-backend || true
+            docker rm moto-backend || true
+            
+            # 5. Run the new container
+            docker run -d \
+              --name moto-backend \
+              --restart always \
+              --network my-network \
+              -p 127.0.0.1:3001:4201 \
+              --env-file .env \
+              moto-backend 

@@ -1,5 +1,6 @@
 import request from 'supertest';
 import { app, mongoose, server } from '../server.js';
+import { ensureConnection } from './setup.js';
 import Club from '../models/ClubModel.js';
 import assert from 'assert';
 import dotenv from 'dotenv';
@@ -8,11 +9,10 @@ dotenv.config();
 
 describe('GET /api/clubs', () => {
   before(async () => {
-    await mongoose.connect(process.env.MONGO_LOCAL_URI);
+    await ensureConnection();
   });
 
   after(async () => {
-    await mongoose.connection.close();
     if (server) {
       server.close();
     }
