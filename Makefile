@@ -34,6 +34,7 @@ start:
 	docker run -d \
 		--name moto-backend \
 		-p 127.0.0.1:3001:4201 \
+		--env-file .env \
 		--restart unless-stopped \
 		moto-backend
 	@echo "Container started."
