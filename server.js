@@ -19,14 +19,14 @@ const app = express();
 
 //middleware
 app.use(express.json());
-app.use(cors());
 const corsOptions = {
-  origin: '*',
-  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  origin: process.env.FRONTEND_URL || '*',
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
+  optionsSuccessStatus: 204,
 };
-
 app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 app.use((req, res, next) => {
   console.log(req.path, req.method);
   next();
