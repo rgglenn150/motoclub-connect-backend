@@ -7,6 +7,18 @@ export async function getPaymentsByCollection(req, res) {
   try {
     const { collectionId } = req.params;
 
+    const collection = await Collection.findById(collectionId);
+    if (!collection) {
+      return res.status(404).json({ message: 'Collection not found' });
+    }
+
+    if (collection.visibility === 'members_only') {
+      const membership = req.user ? await Member.findOne({ club: collection.club, user: req.user._id }) : null;
+      if (!membership) {
+        return res.status(403).json({ message: 'Access restricted to club members' });
+      }
+    }
+
     const payments = await Payment.find({ collection: collectionId })
       .populate('createdBy', 'username')
       .sort({ createdAt: -1 });
@@ -20,7 +32,7 @@ export async function getPaymentsByCollection(req, res) {
 
 export async function createPayment(req, res) {
   try {
-    const { collection: collectionId, name, amount, referenceNumber: rawRef, phoneNumber, description, transactionDate } = req.body;
+    const { collection: collectionId, name, accountName, amount, referenceNumber: rawRef, phoneNumber, description, transactionDate } = req.body;
 
     if (!collectionId || !name || amount === undefined || !rawRef) {
       return res.status(400).json({ message: 'collection, name, amount, and referenceNumber are required' });
@@ -33,9 +45,10 @@ export async function createPayment(req, res) {
       return res.status(404).json({ message: 'Collection not found' });
     }
 
-    const membership = await Member.findOne({ club: collection.club, user: req.user._id, roles: 'admin' });
-    if (!membership) {
-      return res.status(403).json({ message: 'Only club admins can add payments' });
+    if (collection.visibility !== 'public') {
+      if (!req.user) return res.status(401).json({ message: 'Authentication required' });
+      const membership = await Member.findOne({ club: collection.club, user: req.user._id, roles: 'admin' });
+      if (!membership) return res.status(403).json({ message: 'Only club admins can add payments' });
     }
 
     const duplicate = await Payment.findOne({ collection: collectionId, referenceNumber });
@@ -60,9 +73,10 @@ export async function createPayment(req, res) {
       collection: collectionId,
       club: collection.club,
       name,
+      ...(accountName && { accountName }),
       amount,
       referenceNumber,
-      createdBy: req.user._id,
+      ...(req.user && { createdBy: req.user._id }),
       ...(phoneNumber && { phoneNumber }),
       ...(description && { description }),
       transactionDate: transactionDate ? new Date(transactionDate) : new Date(),

@@ -7,7 +7,7 @@ import {
   deletePayment,
   extractReceiptData,
 } from '../controllers/paymentController.js';
-import authMiddleware from '../middlewares/authMiddleware.js';
+import authMiddleware, { optionalAuthMiddleware } from '../middlewares/authMiddleware.js';
 
 const router = express.Router();
 
@@ -16,10 +16,10 @@ const upload = multer({
   limits: { fileSize: 10 * 1024 * 1024 },
 });
 
-router.get('/collection/:collectionId', authMiddleware, getPaymentsByCollection);
-router.post('/create', authMiddleware, upload.single('receipt'), createPayment);
+router.get('/collection/:collectionId', optionalAuthMiddleware, getPaymentsByCollection);
+router.post('/create', optionalAuthMiddleware, upload.single('receipt'), createPayment);
 router.patch('/:paymentId/status', authMiddleware, updatePaymentStatus);
 router.delete('/:paymentId', authMiddleware, deletePayment);
-router.post('/extract-receipt', authMiddleware, upload.single('receipt'), extractReceiptData);
+router.post('/extract-receipt', optionalAuthMiddleware, upload.single('receipt'), extractReceiptData);
 
 export default router;

@@ -7,6 +7,7 @@ const collectionSchema = new Schema({
   description:  { type: String, trim: true },
   targetAmount: { type: Number },
   status:       { type: String, enum: ['open', 'closed'], default: 'open' },
+  visibility:   { type: String, enum: ['public', 'members_only'], default: 'members_only' },
   createdBy:    { type: Schema.Types.ObjectId, ref: 'User', required: true },
 }, { timestamps: true, suppressReservedKeysWarning: true });
 
