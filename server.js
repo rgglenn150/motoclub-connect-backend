@@ -19,8 +19,14 @@ const app = express();
 
 //middleware
 app.use(express.json());
+const allowedOrigins = process.env.FRONTEND_URL
+  ? process.env.FRONTEND_URL.split(',').map(o => o.trim())
+  : ['*'];
 const corsOptions = {
-  origin: process.env.FRONTEND_URL || '*',
+  origin: allowedOrigins.includes('*') ? '*' : (origin, cb) => {
+    if (!origin || allowedOrigins.includes(origin)) cb(null, true);
+    else cb(new Error('Not allowed by CORS'));
+  },
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   optionsSuccessStatus: 204,

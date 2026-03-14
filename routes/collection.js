@@ -5,11 +5,11 @@ import {
   updateCollection,
   deleteCollection,
 } from '../controllers/collectionController.js';
-import authMiddleware from '../middlewares/authMiddleware.js';
+import authMiddleware, { optionalAuthMiddleware } from '../middlewares/authMiddleware.js';
 
 const router = express.Router();
 
-router.get('/club/:clubId', authMiddleware, getCollectionsByClub);
+router.get('/club/:clubId', optionalAuthMiddleware, getCollectionsByClub);
 router.post('/create', authMiddleware, createCollection);
 router.put('/:collectionId', authMiddleware, updateCollection);
 router.delete('/:collectionId', authMiddleware, deleteCollection);
