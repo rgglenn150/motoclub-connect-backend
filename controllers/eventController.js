@@ -116,6 +116,21 @@ export async function getMyClubEvents(req, res) {
   }
 }
 
+export async function getEventById(req, res) {
+  try {
+    const event = await Event.findById(req.params.eventId)
+      .populate('club', 'clubName')
+      .populate('createdBy', 'username name');
+    if (!event) {
+      return res.status(404).json({ message: 'Event not found' });
+    }
+    res.status(200).json(event);
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).send('Server Error');
+  }
+}
+
 /**
  * Uploads an event image to Cloudinary and stores the resulting URL on the event.
  * Expects a multipart/form-data request with field name 'eventImage'.
