@@ -17,6 +17,7 @@ import {
   promoteToAdmin,
   demoteToMember,
   checkClubNameAvailability,
+  getMyClubs,
   getNearbyClubs,
 } from '../controllers/clubController.js';
 import authMiddleware from '../middlewares/authMiddleware.js';
@@ -41,6 +42,7 @@ router.post(
 );
 
 router.get('/', getAllClubs);
+router.get('/my', authMiddleware, getMyClubs);
 router.get('/nearby', getNearbyClubs);
 router.get('/check-name/:name', checkClubNameAvailability);
 router.get('/:id', authMiddleware, getClubById);
