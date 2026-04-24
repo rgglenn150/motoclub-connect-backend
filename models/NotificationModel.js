@@ -12,10 +12,11 @@ const notificationSchema = new Schema(
       required: true,
       enum: [
         'join_request',
-        'request_approved', 
+        'request_approved',
         'request_rejected',
         'new_member',
-        'role_change'
+        'role_change',
+        'event_join'
       ],
     },
     recipient: {
@@ -32,7 +33,8 @@ const notificationSchema = new Schema(
     club: {
       type: Schema.Types.ObjectId,
       ref: 'Club',
-      required: true,
+      required: false, // Optional - global event notifications have no club
+      default: null,
       index: true, // Index for efficient queries by club
     },
     message: {

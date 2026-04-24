@@ -50,15 +50,42 @@ const eventSchema = new Schema(
       type: Boolean,
       default: true,
     },
+    scope: {
+      type: String,
+      enum: ['club', 'global'],
+      default: 'club',
+      index: true,
+    },
     club: {
       type: Schema.Types.ObjectId,
       ref: 'Club',
-      required: true,
+      required: function () {
+        return this.scope === 'club';
+      },
     },
     createdBy: {
       type: Schema.Types.ObjectId,
       ref: 'User',
       required: true,
+    },
+    attendees: [
+      {
+        type: Schema.Types.ObjectId,
+        ref: 'User',
+      },
+    ],
+    attendeeCount: {
+      type: Number,
+      default: 0,
+    },
+    maxAttendees: {
+      type: Number,
+      default: null,
+    },
+    joinPolicy: {
+      type: String,
+      enum: ['instant'],
+      default: 'instant',
     },
     // Optional image fields stored in Cloudinary
     imageUrl: {
@@ -78,7 +105,10 @@ const eventSchema = new Schema(
 // Create a 2dsphere index for geospatial queries (if geolocation exists)
 eventSchema.index({
   'geolocation.latitude': 1,
-  'geolocation.longitude': 1
+  'geolocation.longitude': 1,
 });
+
+// Compound index for global event feed queries
+eventSchema.index({ scope: 1, startTime: 1 });
 
 export default mongoose.model('Event', eventSchema);
