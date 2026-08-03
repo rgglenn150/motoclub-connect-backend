@@ -44,8 +44,19 @@ class IDCardService {
         throw new Error('Club does not match official member');
       }
 
+      // Inline remote images as data URIs before rendering. sharp's SVG
+      // renderer (librsvg) will not fetch external URLs, so an
+      // <image href="https://..."> element renders blank.
+      const [logoDataUri, photoDataUri] = await Promise.all([
+        this.fetchImageAsDataUri(member.club?.logoUrl),
+        this.fetchImageAsDataUri(member.photoUrl),
+      ]);
+
       // Generate the SVG template
-      const svgTemplate = this.createSVGTemplate(member);
+      const svgTemplate = this.createSVGTemplate(member, {
+        logoDataUri,
+        photoDataUri,
+      });
 
       // Convert SVG to PNG using sharp
       const pngBuffer = await sharp(Buffer.from(svgTemplate))
@@ -68,9 +79,12 @@ class IDCardService {
   /**
    * Create SVG template for ID card
    * @param {Object} member - Official member document with populated club
+   * @param {Object} [images] - Pre-fetched images as base64 data URIs
+   * @param {string|null} [images.logoDataUri] - Club logo, or null to use the placeholder
+   * @param {string|null} [images.photoDataUri] - Member photo, or null to use the placeholder
    * @returns {string} SVG markup
    */
-  static createSVGTemplate(member) {
+  static createSVGTemplate(member, images = {}) {
     const {
       club,
       firstName,
@@ -78,11 +92,13 @@ class IDCardService {
       officialNumber,
       plateNumber,
       address,
-      photoUrl,
     } = member;
 
+    const { logoDataUri = null, photoDataUri = null } = images;
+
     const clubName = club?.clubName || 'Motorcycle Club';
-    const clubLogo = club?.logoUrl || null;
+    const clubLogo = logoDataUri;
+    const photoUrl = photoDataUri;
     const fullName = `${firstName} ${lastName}`;
     const currentYear = new Date().getFullYear();
 
@@ -191,18 +207,20 @@ class IDCardService {
         </g>
 
         <!-- Footer -->
-        <rect x="0" y="${this.CARD_HEIGHT - 80}" width="${this.CARD_WIDTH}" height="80"
+        <!-- Band stops at the inner border (y = CARD_HEIGHT - 20) so it does
+             not bleed over the rounded corners -->
+        <rect x="0" y="${this.CARD_HEIGHT - 80}" width="${this.CARD_WIDTH}" height="60"
               fill="${this.COLORS.overlay}" opacity="0.5" />
         <line x1="20" y1="${this.CARD_HEIGHT - 80}" x2="${this.CARD_WIDTH - 20}" y2="${this.CARD_HEIGHT - 80}"
               stroke="${this.COLORS.accent}" stroke-width="2" />
 
-        <text x="${this.CARD_WIDTH / 2}" y="${this.CARD_HEIGHT - 45}"
+        <text x="${this.CARD_WIDTH / 2}" y="${this.CARD_HEIGHT - 50}"
               font-family="Arial, sans-serif" font-size="24" font-weight="bold"
               fill="${this.COLORS.textPrimary}" text-anchor="middle" letter-spacing="3">
           VALID MEMBER - ${currentYear}
         </text>
 
-        <text x="${this.CARD_WIDTH / 2}" y="${this.CARD_HEIGHT - 20}"
+        <text x="${this.CARD_WIDTH / 2}" y="${this.CARD_HEIGHT - 28}"
               font-family="Arial, sans-serif" font-size="14"
               fill="${this.COLORS.textSecondary}" text-anchor="middle">
           This card is the property of ${this.escapeSVG(clubName)}
@@ -244,6 +262,29 @@ class IDCardService {
       return Buffer.from(response.data);
     } catch (error) {
       throw new Error(`Failed to fetch image: ${error.message}`);
+    }
+  }
+
+  /**
+   * Fetch an image and return it as a base64 data URI for embedding in SVG.
+   * Returns null when the URL is missing or unreachable so the card falls back
+   * to its placeholder rather than failing to generate at all.
+   * @param {string} imageUrl - URL of the image
+   * @returns {Promise<string|null>} Data URI, or null if unavailable
+   */
+  static async fetchImageAsDataUri(imageUrl) {
+    if (!imageUrl) {
+      return null;
+    }
+
+    try {
+      const buffer = await this.fetchImageBuffer(imageUrl);
+      // Normalise to PNG so the declared mime type is always correct
+      const png = await sharp(buffer).png().toBuffer();
+      return `data:image/png;base64,${png.toString('base64')}`;
+    } catch (error) {
+      console.warn(`ID card: could not load image ${imageUrl}: ${error.message}`);
+      return null;
     }
   }
 
