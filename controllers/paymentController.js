@@ -158,10 +158,31 @@ export async function deletePayment(req, res) {
   }
 }
 
+// Vision model used for receipt OCR. Overridable via env so a retired model can
+// be swapped without a code change — OpenRouter returns 404 once a model is
+// pulled (google/gemini-2.0-flash-lite-001 was retired this way).
+const RECEIPT_MODEL =
+  process.env.OPENROUTER_MODEL || 'google/gemini-2.5-flash-lite';
+
+// The model returns the amount as text often enough ("PHP 1,250.00", "1,250.00")
+// that it has to be coerced here — the client binds it straight to a number field.
+function parseAmount(value) {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+  if (typeof value !== 'string') return null;
+  const cleaned = value.replace(/[^\d.,-]/g, '').replace(/,/g, '');
+  const parsed = Number.parseFloat(cleaned);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 export async function extractReceiptData(req, res) {
   try {
     if (!req.file) {
       return res.status(400).json({ message: 'Receipt file is required' });
+    }
+
+    if (!process.env.OPENROUTER_API_KEY) {
+      console.error('OPENROUTER_API_KEY is not set; receipt scanning is disabled');
+      return res.status(503).json({ message: 'Receipt scanning is unavailable. Please fill in the fields manually.' });
     }
 
     const base64Image = req.file.buffer.toString('base64');
@@ -174,7 +195,7 @@ export async function extractReceiptData(req, res) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'google/gemini-2.0-flash-lite-001',
+        model: RECEIPT_MODEL,
         messages: [
           {
             role: 'user',
@@ -193,6 +214,14 @@ export async function extractReceiptData(req, res) {
       if (response.status === 429) {
         return res.status(429).json({ message: 'AI quota exceeded. Please fill in the fields manually.' });
       }
+      if (response.status === 404) {
+        console.error(
+          `Model "${RECEIPT_MODEL}" is unavailable on OpenRouter (likely retired). Set OPENROUTER_MODEL to a current vision model.`
+        );
+      }
+      if (response.status === 401 || response.status === 403) {
+        console.error('OpenRouter rejected the API key. Check OPENROUTER_API_KEY.');
+      }
       return res.status(502).json({ message: 'Failed to read receipt. Please fill in the fields manually.' });
     }
 
@@ -209,7 +238,7 @@ export async function extractReceiptData(req, res) {
 
     return res.status(200).json({
       name: parsed.name ?? null,
-      amount: parsed.amount ?? null,
+      amount: parseAmount(parsed.amount),
       referenceNumber: parsed.referenceNumber ?? null,
       phoneNumber: parsed.phoneNumber ?? null,
       transactionDateTime: parsed.transactionDateTime ?? null,
