@@ -84,6 +84,15 @@ describe('utils/collectionProgress', () => {
       });
     });
 
+    it('never draws negative segments', () => {
+      expect(
+        progressPercents({ confirmedTotal: -500, pendingTotal: -200 }, 10000)
+      ).to.deep.equal({ confirmedPct: 0, pendingPct: 0 });
+      expect(
+        progressPercents({ confirmedTotal: 1000, pendingTotal: -200 }, 10000)
+      ).to.deep.equal({ confirmedPct: 10, pendingPct: 0 });
+    });
+
     it('returns null without a positive target', () => {
       expect(
         progressPercents({ confirmedTotal: 500, pendingTotal: 0 }, undefined)

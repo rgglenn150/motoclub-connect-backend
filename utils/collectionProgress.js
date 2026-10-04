@@ -62,10 +62,14 @@ export function progressPercents(
   targetAmount
 ) {
   if (!(targetAmount > 0)) return null;
-  const confirmedPct = Math.min(100, (confirmedTotal / targetAmount) * 100);
-  const pendingPct = Math.min(
-    100 - confirmedPct,
-    (pendingTotal / targetAmount) * 100
+  // Clamped at 0 too: a bad stored amount must never draw a negative segment.
+  const confirmedPct = Math.max(
+    0,
+    Math.min(100, (confirmedTotal / targetAmount) * 100)
+  );
+  const pendingPct = Math.max(
+    0,
+    Math.min(100 - confirmedPct, (pendingTotal / targetAmount) * 100)
   );
   return { confirmedPct, pendingPct };
 }

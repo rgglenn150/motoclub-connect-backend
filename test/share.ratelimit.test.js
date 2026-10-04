@@ -59,11 +59,21 @@ describe('Share route rate limit', () => {
   describe('in the app', function () {
     this.timeout(30000);
 
+    // One listening server for the whole burst: supertest otherwise starts a
+    // new one per request, and 120+ of those in a row can drop connections.
+    let server;
+    before((done) => {
+      server = app.listen(0, done);
+    });
+    after((done) => {
+      server.close(done);
+    });
+
     it(`limits /share to ${SHARE_RATE_LIMIT_PER_MIN} requests per minute per client`, async () => {
       const client = '203.0.113.9';
       let last;
       for (let i = 0; i <= SHARE_RATE_LIMIT_PER_MIN; i += 1) {
-        last = await request(app)
+        last = await request(server)
           .get('/share/collection/not-an-id/card.png')
           .set('X-Forwarded-For', client);
         if (i < SHARE_RATE_LIMIT_PER_MIN) expect(last.status).to.equal(404);
@@ -75,12 +85,12 @@ describe('Share route rate limit', () => {
     it('never limits the API', async () => {
       const client = '203.0.113.10';
       for (let i = 0; i <= SHARE_RATE_LIMIT_PER_MIN; i += 1) {
-        await request(app)
+        await request(server)
           .get('/share/collection/not-an-id/card.png')
           .set('X-Forwarded-For', client);
       }
 
-      const api = await request(app)
+      const api = await request(server)
         .get('/api/wakeup')
         .set('X-Forwarded-For', client);
 
