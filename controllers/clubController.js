@@ -23,6 +23,7 @@ export {
   updateClub,
   addMember,
   getAllClubs,
+  getMyClubs,
   getClubById,
   joinClub,
   uploadClubLogo,
@@ -390,35 +391,191 @@ async function addMember(req, res) {
 
 async function getAllClubs(req, res) {
   try {
-    const clubs = await Club.find();
-    console.log('Found clubs:', clubs.length);
+    const {
+      page = 1,
+      limit = 15,
+      search = '',
+      sort = 'members',
+    } = req.query;
 
-    const clubsWithId = clubs.map((club) => {
-      console.log('Processing club:', club._id, 'Name:', club.clubName);
-      return {
-        _id: club._id,
-        clubName: club.clubName,
-        description: club.description,
-        location: club.location || '',
-        geolocation: club.geolocation,
-        isPrivate: club.isPrivate,
-        members: club.members,
-        createdBy: club.createdBy,
-        createdAt: club.createdAt,
-        logoUrl: club.logoUrl,
+    const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    const limitNum = Math.min(50, Math.max(1, parseInt(limit, 10) || 15));
+    const skip = (pageNum - 1) * limitNum;
+
+    // Build search filter
+    let filter = {};
+    if (search && search.trim().length > 0) {
+      const escapedSearch = search.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const searchRegex = new RegExp(escapedSearch, 'i');
+      filter = {
+        $or: [
+          { clubName: searchRegex },
+          { location: searchRegex },
+          { description: searchRegex },
+        ],
       };
+    }
+
+    // Get total count for pagination metadata
+    const total = await Club.countDocuments(filter);
+
+    // Build aggregation pipeline for flexible sorting
+    const pipeline = [];
+
+    // Match stage (search filter)
+    if (Object.keys(filter).length > 0) {
+      pipeline.push({ $match: filter });
+    }
+
+    // Add computed memberCount field
+    pipeline.push({
+      $addFields: { memberCount: { $size: { $ifNull: ['$members', []] } } },
     });
 
-    console.log('Returning clubs with IDs:', clubsWithId.map(c => ({ id: c._id, name: c.clubName })));
+    // Sort stage
+    if (sort === 'newest') {
+      pipeline.push({ $sort: { createdAt: -1 } });
+    } else if (sort === 'name') {
+      pipeline.push({ $sort: { clubName: 1 } });
+    } else {
+      // Default: sort by most members descending, then newest
+      pipeline.push({ $sort: { memberCount: -1, createdAt: -1 } });
+    }
+
+    // Pagination
+    pipeline.push({ $skip: skip });
+    pipeline.push({ $limit: limitNum });
+
+    const clubs = await Club.aggregate(pipeline);
+
+    const clubsWithId = clubs.map((club) => ({
+      _id: club._id,
+      clubName: club.clubName,
+      description: club.description,
+      location: club.location || '',
+      geolocation: club.geolocation,
+      isPrivate: club.isPrivate,
+      members: club.members,
+      memberCount: club.memberCount ?? (club.members ? club.members.length : 0),
+      createdBy: club.createdBy,
+      createdAt: club.createdAt,
+      logoUrl: club.logoUrl,
+    }));
+
+    const totalPages = Math.ceil(total / limitNum);
 
     res.status(200).json({
       message: 'Clubs retrieved successfully',
       clubs: clubsWithId,
+      total,
+      page: pageNum,
+      totalPages,
     });
   } catch (error) {
     console.error('Error getting all clubs:', error);
     res.status(500).json({
       message: 'Server error retrieving clubs',
+      error: error?.message || error,
+    });
+  }
+}
+
+/**
+ * GET /api/club/my - Get clubs the authenticated user is a member of
+ * Supports the same pagination, search, and sort params as getAllClubs
+ */
+async function getMyClubs(req, res) {
+  try {
+    const userId = req.user._id;
+    const {
+      page = 1,
+      limit = 15,
+      search = '',
+      sort = 'members',
+    } = req.query;
+
+    const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    const limitNum = Math.min(50, Math.max(1, parseInt(limit, 10) || 15));
+    const skip = (pageNum - 1) * limitNum;
+
+    // Find all club IDs where user is a member
+    const memberships = await Member.find({ user: userId }).select('club');
+    const clubIds = memberships.map((m) => m.club);
+
+    // Build search filter scoped to user's clubs
+    let filter = { _id: { $in: clubIds } };
+    if (search && search.trim().length > 0) {
+      const escapedSearch = search.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const searchRegex = new RegExp(escapedSearch, 'i');
+      filter.$or = [
+        { clubName: searchRegex },
+        { location: searchRegex },
+        { description: searchRegex },
+      ];
+      // Wrap in $and to combine with _id filter
+      filter = {
+        $and: [
+          { _id: { $in: clubIds } },
+          {
+            $or: [
+              { clubName: searchRegex },
+              { location: searchRegex },
+              { description: searchRegex },
+            ],
+          },
+        ],
+      };
+    }
+
+    const total = await Club.countDocuments(filter);
+
+    // Aggregation pipeline
+    const pipeline = [];
+    pipeline.push({ $match: filter });
+    pipeline.push({
+      $addFields: { memberCount: { $size: { $ifNull: ['$members', []] } } },
+    });
+
+    if (sort === 'newest') {
+      pipeline.push({ $sort: { createdAt: -1 } });
+    } else if (sort === 'name') {
+      pipeline.push({ $sort: { clubName: 1 } });
+    } else {
+      pipeline.push({ $sort: { memberCount: -1, createdAt: -1 } });
+    }
+
+    pipeline.push({ $skip: skip });
+    pipeline.push({ $limit: limitNum });
+
+    const clubs = await Club.aggregate(pipeline);
+
+    const clubsWithId = clubs.map((club) => ({
+      _id: club._id,
+      clubName: club.clubName,
+      description: club.description,
+      location: club.location || '',
+      geolocation: club.geolocation,
+      isPrivate: club.isPrivate,
+      members: club.members,
+      memberCount: club.memberCount ?? (club.members ? club.members.length : 0),
+      createdBy: club.createdBy,
+      createdAt: club.createdAt,
+      logoUrl: club.logoUrl,
+    }));
+
+    const totalPages = Math.ceil(total / limitNum);
+
+    res.status(200).json({
+      message: 'User clubs retrieved successfully',
+      clubs: clubsWithId,
+      total,
+      page: pageNum,
+      totalPages,
+    });
+  } catch (error) {
+    console.error('Error getting user clubs:', error);
+    res.status(500).json({
+      message: 'Server error retrieving user clubs',
       error: error?.message || error,
     });
   }
