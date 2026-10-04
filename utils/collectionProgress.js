@@ -11,6 +11,19 @@ import Payment from '../models/PaymentModel.js';
 const COUNTED_STATUSES = ['confirmed', 'pending'];
 
 /**
+ * How payment statuses are worded for people (spec 003). Stored values stay
+ * pending / confirmed / rejected; only the words change.
+ */
+export const STATUS_LABEL = Object.freeze({
+  confirmed: Object.freeze({ title: 'Verified', lower: 'verified' }),
+  pending: Object.freeze({
+    title: 'Awaiting Verification',
+    lower: 'awaiting verification',
+  }),
+  rejected: Object.freeze({ title: 'Rejected', lower: 'rejected' }),
+});
+
+/**
  * Totals per collection in one aggregate.
  * @param {Array<string|mongoose.Types.ObjectId>} collectionIds
  * @returns {Promise<Map<string, { confirmedTotal: number, pendingTotal: number }>>}
@@ -84,16 +97,22 @@ export function formatPeso(amount) {
   })}`;
 }
 
-/** e.g. "₱4,500 confirmed + ₱1,200 pending of ₱10,000." */
+/**
+ * e.g. "₱1,200 awaiting verification + ₱4,500 verified of ₱12,000."
+ * The awaiting amount comes first and is dropped at 0; the verified amount is
+ * always shown (spec 003 FR-003, FR-004).
+ */
 export function formatProgressText(
   { confirmedTotal, pendingTotal },
   targetAmount
 ) {
-  const pending =
-    pendingTotal > 0 ? ` + ${formatPeso(pendingTotal)} pending` : '';
+  const awaiting =
+    pendingTotal > 0
+      ? `${formatPeso(pendingTotal)} ${STATUS_LABEL.pending.lower} + `
+      : '';
   const tail =
     targetAmount > 0 ? ` of ${formatPeso(targetAmount)}.` : ' so far.';
-  return `${formatPeso(confirmedTotal)} confirmed${pending}${tail}`;
+  return `${awaiting}${formatPeso(confirmedTotal)} ${STATUS_LABEL.confirmed.lower}${tail}`;
 }
 
 /** Cache-buster for the share card URL: changes when totals or the collection change. */

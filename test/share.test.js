@@ -84,7 +84,7 @@ describe('GET /share/collection/:collectionId', () => {
       'Ride for Relief · Iron Riders'
     );
     expect(meta(res.text, 'property', 'og:description')).to.equal(
-      'Fuel and supplies for the typhoon run. ₱4,500 confirmed + ₱1,200 pending of ₱10,000.'
+      'Fuel and supplies for the typhoon run. ₱1,200 awaiting verification + ₱4,500 verified of ₱10,000.'
     );
     expect(aggregate.firstCall.args[0][0].$match.status).to.deep.equal({
       $in: ['confirmed', 'pending'],
@@ -137,7 +137,7 @@ describe('GET /share/collection/:collectionId', () => {
       .set('User-Agent', FB_UA);
 
     expect(meta(res.text, 'property', 'og:description')).to.equal(
-      'Iron Riders is collecting contributions. ₱4,500 confirmed + ₱1,200 pending of ₱10,000.'
+      'Iron Riders is collecting contributions. ₱1,200 awaiting verification + ₱4,500 verified of ₱10,000.'
     );
   });
 
@@ -152,7 +152,7 @@ describe('GET /share/collection/:collectionId', () => {
       .set('User-Agent', FB_UA);
 
     expect(meta(res.text, 'property', 'og:description')).to.equal(
-      'Fuel and supplies for the typhoon run. ₱4,500 confirmed so far.'
+      'Fuel and supplies for the typhoon run. ₱4,500 verified so far.'
     );
     expect(meta(res.text, 'property', 'og:image')).to.include(
       '/card.png?v=4500-0-'

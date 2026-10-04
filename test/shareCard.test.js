@@ -41,7 +41,8 @@ describe('utils/shareCard', () => {
 
       expect(confirmed / track).to.be.closeTo(0.45, 0.001);
       expect(pending / track).to.be.closeTo(0.12, 0.001);
-      expect(svg).to.include('₱4,500 confirmed · ₱1,200 pending');
+      // Spec 003: awaiting first, new words; bar drawing unchanged.
+      expect(svg).to.include('₱1,200 awaiting verification · ₱4,500 verified');
       expect(svg).to.include('of ₱10,000 target');
     });
 
@@ -60,8 +61,8 @@ describe('utils/shareCard', () => {
       );
 
       expect(barWidths(svg)).to.not.have.property('pending');
-      expect(svg).to.not.include('pending');
-      expect(svg).to.include('₱4,500 confirmed');
+      expect(svg).to.not.include('awaiting');
+      expect(svg).to.include('₱4,500 verified');
     });
 
     it('shows amounts without a bar when there is no target', () => {
@@ -73,8 +74,29 @@ describe('utils/shareCard', () => {
       );
 
       expect(svg).to.not.include('bar-track');
-      expect(svg).to.include('₱500 confirmed · ₱250 pending');
+      expect(svg).to.include('₱250 awaiting verification · ₱500 verified');
       expect(svg).to.not.include('target');
+    });
+
+    it('shrinks the amounts line so long amounts stay on the card (spec 003)', () => {
+      const amountsSize = (svg) =>
+        Number(
+          svg.match(/font-size="(\d+)" font-weight="bold" fill="#ffffff">₱/)[1]
+        );
+
+      const short = buildCardSvg(
+        card({ progress: { confirmedTotal: 4500, pendingTotal: 0 } })
+      );
+      const long = buildCardSvg(
+        card({
+          progress: { confirmedTotal: 104500.5, pendingTotal: 121200.75 },
+          targetAmount: 1000000,
+        })
+      );
+
+      expect(amountsSize(short)).to.equal(44);
+      expect(amountsSize(long)).to.be.below(44);
+      expect(amountsSize(long)).to.be.at.least(28);
     });
 
     it('escapes and truncates user text', () => {

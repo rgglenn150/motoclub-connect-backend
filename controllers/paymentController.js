@@ -2,6 +2,8 @@ import Payment from '../models/PaymentModel.js';
 import Collection from '../models/CollectionModel.js';
 import Member from '../models/MemberModel.js';
 import cloudinary from '../utils/cloudinary.js';
+import { STATUS_LABEL } from '../utils/collectionProgress.js';
+import { serializePayment } from '../utils/paymentView.js';
 
 export async function getPaymentsByCollection(req, res) {
   try {
@@ -27,7 +29,22 @@ export async function getPaymentsByCollection(req, res) {
       .populate('createdBy', 'username')
       .sort({ createdAt: -1 });
 
-    return res.status(200).json({ payments });
+    // Private details only for this club's admins and each payment's own
+    // submitter (spec 003 FR-013); one admin lookup per request.
+    const viewerId = req.user?._id ?? null;
+    const isAdmin = viewerId
+      ? !!(await Member.findOne({
+          club: collection.club,
+          user: viewerId,
+          roles: 'admin',
+        }))
+      : false;
+
+    return res.status(200).json({
+      payments: payments.map((payment) =>
+        serializePayment(payment, { isAdmin, viewerId })
+      ),
+    });
   } catch (err) {
     console.error('Error fetching payments:', err.message);
     return res
@@ -61,22 +78,18 @@ export async function createPayment(req, res) {
     } = req.body;
 
     if (!collectionId || !name || amount === undefined || !rawRef) {
-      return res
-        .status(400)
-        .json({
-          message: 'collection, name, amount, and referenceNumber are required',
-        });
+      return res.status(400).json({
+        message: 'collection, name, amount, and referenceNumber are required',
+      });
     }
 
     // Pending amounts are shown publicly for public collections (spec 001,
     // FR-020), so only accept plain positive amounts in pesos and centavos.
     if (!isValidAmount(amount)) {
-      return res
-        .status(400)
-        .json({
-          message:
-            'amount must be a positive number up to 10,000,000 with at most 2 decimals',
-        });
+      return res.status(400).json({
+        message:
+          'amount must be a positive number up to 10,000,000 with at most 2 decimals',
+      });
     }
 
     const referenceNumber = rawRef.replace(/[\s-]/g, '');
@@ -105,11 +118,9 @@ export async function createPayment(req, res) {
       referenceNumber,
     });
     if (duplicate) {
-      return res
-        .status(409)
-        .json({
-          message: `Reference number "${referenceNumber}" already exists in this collection.`,
-        });
+      return res.status(409).json({
+        message: `Reference number "${referenceNumber}" already exists in this collection.`,
+      });
     }
 
     let receiptUrl;
@@ -142,7 +153,10 @@ export async function createPayment(req, res) {
 
     await payment.save();
 
-    return res.status(201).json({ payment });
+    // The submitter sees what they entered (spec 003 US5 AC6).
+    return res
+      .status(201)
+      .json({ payment: serializePayment(payment, { isAdmin: true }) });
   } catch (err) {
     console.error('Error creating payment:', err.message);
     return res
@@ -181,12 +195,11 @@ export async function updatePaymentStatus(req, res) {
     }
 
     const alreadyResolved = (current) =>
-      res
-        .status(409)
-        .json({
-          message: `Payment is already ${current} and can't be changed.`,
-          status: current,
-        });
+      res.status(409).json({
+        // Human wording (spec 003); `status` keeps the stored value.
+        message: `Payment is already ${STATUS_LABEL[current]?.lower ?? current} and can't be changed.`,
+        status: current,
+      });
 
     if (payment.status !== 'pending') {
       return alreadyResolved(payment.status);
@@ -206,7 +219,9 @@ export async function updatePaymentStatus(req, res) {
       return alreadyResolved(current.status);
     }
 
-    return res.status(200).json({ payment: updated });
+    return res
+      .status(200)
+      .json({ payment: serializePayment(updated, { isAdmin: true }) });
   } catch (err) {
     console.error('Error updating payment status:', err.message);
     return res
@@ -281,12 +296,10 @@ export async function extractReceiptData(req, res) {
       console.error(
         'OPENROUTER_API_KEY is not set; receipt scanning is disabled'
       );
-      return res
-        .status(503)
-        .json({
-          message:
-            'Receipt scanning is unavailable. Please fill in the fields manually.',
-        });
+      return res.status(503).json({
+        message:
+          'Receipt scanning is unavailable. Please fill in the fields manually.',
+      });
     }
 
     const base64Image = req.file.buffer.toString('base64');
@@ -322,11 +335,9 @@ export async function extractReceiptData(req, res) {
       const errBody = await response.json().catch(() => ({}));
       console.error('OpenRouter error:', response.status, errBody);
       if (response.status === 429) {
-        return res
-          .status(429)
-          .json({
-            message: 'AI quota exceeded. Please fill in the fields manually.',
-          });
+        return res.status(429).json({
+          message: 'AI quota exceeded. Please fill in the fields manually.',
+        });
       }
       if (response.status === 404) {
         console.error(
@@ -338,12 +349,9 @@ export async function extractReceiptData(req, res) {
           'OpenRouter rejected the API key. Check OPENROUTER_API_KEY.'
         );
       }
-      return res
-        .status(502)
-        .json({
-          message:
-            'Failed to read receipt. Please fill in the fields manually.',
-        });
+      return res.status(502).json({
+        message: 'Failed to read receipt. Please fill in the fields manually.',
+      });
     }
 
     const data = await response.json();
@@ -375,10 +383,8 @@ export async function extractReceiptData(req, res) {
     });
   } catch (err) {
     console.error('Error extracting receipt data:', err.message);
-    return res
-      .status(500)
-      .json({
-        message: 'Failed to read receipt. Please fill in the fields manually.',
-      });
+    return res.status(500).json({
+      message: 'Failed to read receipt. Please fill in the fields manually.',
+    });
   }
 }
