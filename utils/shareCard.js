@@ -4,6 +4,7 @@ import {
   formatPeso,
   progressPercents,
   progressVersion,
+  STATUS_LABEL,
 } from './collectionProgress.js';
 
 /**
@@ -28,6 +29,14 @@ const COLORS = {
 };
 
 const BAR = { x: 80, y: 380, width: 1040, height: 40 };
+
+// Bold DejaVu Sans averages ~0.62em per glyph for this text; used to keep the
+// amounts line inside the card when amounts get long (spec 003 wording).
+const AMOUNTS_FONT = { max: 44, min: 28, emPerChar: 0.62 };
+function fitFontSize(text, width) {
+  const fitted = Math.floor(width / (text.length * AMOUNTS_FONT.emPerChar));
+  return Math.max(AMOUNTS_FONT.min, Math.min(AMOUNTS_FONT.max, fitted));
+}
 const LOGO = { x: 80, y: 80, size: 160 };
 
 // Insertion-ordered Map used as a small LRU: crawlers fetch the same card
@@ -108,9 +117,16 @@ export function buildCardSvg({
   targetAmount,
 }) {
   const percents = progressPercents(progress, targetAmount);
-  const amounts = [`${formatPeso(progress.confirmedTotal)} confirmed`];
+  // Awaiting first, then verified (spec 003 FR-003); the bar is unchanged.
+  const amounts = [];
   if (progress.pendingTotal > 0)
-    amounts.push(`${formatPeso(progress.pendingTotal)} pending`);
+    amounts.push(
+      `${formatPeso(progress.pendingTotal)} ${STATUS_LABEL.pending.lower}`
+    );
+  amounts.push(
+    `${formatPeso(progress.confirmedTotal)} ${STATUS_LABEL.confirmed.lower}`
+  );
+  const amountsText = amounts.join(' · ');
 
   // Without a bar the amounts move up into its place.
   const amountsY = percents ? 500 : 420;
@@ -124,7 +140,7 @@ export function buildCardSvg({
   <text x="280" y="150" font-family="${FONT}" font-size="56" font-weight="bold" fill="${COLORS.text}">${esc(truncate(collectionName))}</text>
   <text x="280" y="210" font-family="${FONT}" font-size="32" fill="${COLORS.muted}">${esc(truncate(clubName))}</text>
   ${percents ? barMarkup(percents) : ''}
-  <text x="${BAR.x}" y="${amountsY}" font-family="${FONT}" font-size="44" font-weight="bold" fill="${COLORS.text}">${esc(amounts.join(' · '))}</text>
+  <text x="${BAR.x}" y="${amountsY}" font-family="${FONT}" font-size="${fitFontSize(amountsText, BAR.width)}" font-weight="bold" fill="${COLORS.text}">${esc(amountsText)}</text>
   ${goal}
   <text x="${CARD_WIDTH - 80}" y="${CARD_HEIGHT - 40}" font-family="${FONT}" font-size="24" fill="${COLORS.muted}" text-anchor="end">Motoclub Connect</text>
 </svg>`;

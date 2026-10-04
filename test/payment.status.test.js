@@ -80,7 +80,7 @@ describe('PATCH /api/payment/:paymentId/status', () => {
 
       expect(res.status).to.equal(409);
       expect(res.body).to.deep.equal({
-        message: `Payment is already ${current} and can't be changed.`,
+        message: `Payment is already ${current === 'confirmed' ? 'verified' : 'rejected'} and can't be changed.`,
         status: current,
       });
       expect(update.called).to.equal(false);
