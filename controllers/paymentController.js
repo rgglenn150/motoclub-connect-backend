@@ -98,8 +98,10 @@ export async function updatePaymentStatus(req, res) {
     const { paymentId } = req.params;
     const { status } = req.body;
 
-    if (!['pending', 'confirmed', 'rejected'].includes(status)) {
-      return res.status(400).json({ message: 'Invalid status. Must be pending, confirmed, or rejected.' });
+    // Payments only move forward: pending → confirmed | rejected (constitution
+    // VII, spec 001 FR-016). A mistaken resolution is fixed by deleting the payment.
+    if (!['confirmed', 'rejected'].includes(status)) {
+      return res.status(400).json({ message: 'Invalid status. Must be confirmed or rejected.' });
     }
 
     const payment = await Payment.findById(paymentId);
@@ -112,10 +114,28 @@ export async function updatePaymentStatus(req, res) {
       return res.status(403).json({ message: 'Only club admins can update payment status' });
     }
 
-    payment.status = status;
-    await payment.save();
+    const alreadyResolved = (current) =>
+      res.status(409).json({ message: `Payment is already ${current} and can't be changed.`, status: current });
 
-    return res.status(200).json({ payment });
+    if (payment.status !== 'pending') {
+      return alreadyResolved(payment.status);
+    }
+
+    // Conditional update so two admins can't resolve the same payment differently.
+    const updated = await Payment.findOneAndUpdate(
+      { _id: paymentId, status: 'pending' },
+      { status },
+      { new: true }
+    );
+    if (!updated) {
+      const current = await Payment.findById(paymentId);
+      if (!current) {
+        return res.status(404).json({ message: 'Payment not found' });
+      }
+      return alreadyResolved(current.status);
+    }
+
+    return res.status(200).json({ payment: updated });
   } catch (err) {
     console.error('Error updating payment status:', err.message);
     return res.status(500).json({ message: 'Server Error', error: err.message });
