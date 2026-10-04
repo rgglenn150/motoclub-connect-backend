@@ -1,0 +1,24 @@
+{
+  "comment": "Shared fixture for spec 002 FR-008. Both repos test their crawler regex against this list. Update it together with CRAWLER_UA (backend) and the middleware copy (app).",
+  "crawlers": [
+    "facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)",
+    "facebookexternalhit/1.1",
+    "Facebot",
+    "Mozilla/5.0 (compatible; Twitterbot/1.0)",
+    "WhatsApp/2.23.20.0",
+    "Viber/20.3.0",
+    "TelegramBot (like TwitterBot)",
+    "Slackbot-LinkExpanding 1.0 (+https://api.slack.com/robots)",
+    "Mozilla/5.0 (compatible; Discordbot/2.0; +https://discordapp.com)",
+    "LinkedInBot/1.0 (compatible; Mozilla/5.0; Apache-HttpClient +http://www.linkedin.com)",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_1) AppleWebKit/601.2.4 (KHTML, like Gecko) Version/9.0.1 Safari/601.2.4 facebookexternalhit/1.1 Facebot Twitterbot/1.0",
+    "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)"
+  ],
+  "people": [
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1",
+    "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:128.0) Gecko/20100101 Firefox/128.0",
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 [FBAN/FBIOS;FBAV/470.0.0.0]"
+  ]
+}
