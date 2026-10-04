@@ -1,9 +1,17 @@
+import mongoose from 'mongoose';
 import Payment from '../models/PaymentModel.js';
 import Collection from '../models/CollectionModel.js';
 import Member from '../models/MemberModel.js';
 import cloudinary from '../utils/cloudinary.js';
 import { STATUS_LABEL } from '../utils/collectionProgress.js';
 import { serializePayment } from '../utils/paymentView.js';
+import {
+  readStatementLines,
+  parseStatementLines,
+  StatementError,
+  STATEMENT_ERRORS,
+} from '../utils/gcashStatement.js';
+import { matchPayments } from '../utils/statementMatch.js';
 
 export async function getPaymentsByCollection(req, res) {
   try {
@@ -386,5 +394,176 @@ export async function extractReceiptData(req, res) {
     return res.status(500).json({
       message: 'Failed to read receipt. Please fill in the fields manually.',
     });
+  }
+}
+
+const PDF_MAGIC = Buffer.from('%PDF-');
+
+const COLLECTION_NOT_FOUND = {
+  code: 'COLLECTION_NOT_FOUND',
+  message: 'Collection not found.',
+};
+const NOT_CLUB_ADMIN = {
+  code: 'NOT_CLUB_ADMIN',
+  message: 'Only club admins can verify payments.',
+};
+const SERVER_ERROR = {
+  code: 'SERVER_ERROR',
+  message: 'Something went wrong. Please try again.',
+};
+
+function sendStatementError(res, code) {
+  const { status, message } = STATEMENT_ERRORS[code];
+  return res.status(status).json({ code, message });
+}
+
+/**
+ * The collection, if the caller is an admin of its club (constitution VI);
+ * otherwise sends 404 / 403 and returns null.
+ */
+async function adminCollection(req, res) {
+  const { collectionId } = req.params;
+  const collection = mongoose.isValidObjectId(collectionId)
+    ? await Collection.findById(collectionId)
+    : null;
+  if (!collection) {
+    res.status(404).json(COLLECTION_NOT_FOUND);
+    return null;
+  }
+  const membership = await Member.findOne({
+    club: collection.club,
+    user: req.user._id,
+    roles: 'admin',
+  });
+  if (!membership) {
+    res.status(403).json(NOT_CLUB_ADMIN);
+    return null;
+  }
+  return collection;
+}
+
+/**
+ * Spec 004 US1: classify the collection's pending payments against a GCash
+ * statement. Read-only. The statement, its password and its text are never
+ * stored or logged; one line with the outcome code and counts is (red-team F2).
+ */
+export async function checkStatement(req, res) {
+  let clubId;
+  const logOutcome = (outcome, counts = '') =>
+    console.log(
+      `statement-check club=${clubId} outcome=${outcome}${counts ? ` ${counts}` : ''}`
+    );
+
+  try {
+    const collection = await adminCollection(req, res);
+    if (!collection) return undefined;
+    clubId = collection.club;
+
+    const file = req.file;
+    if (
+      !file ||
+      file.mimetype !== 'application/pdf' ||
+      !file.buffer.subarray(0, PDF_MAGIC.length).equals(PDF_MAGIC)
+    ) {
+      logOutcome('NOT_PDF');
+      return sendStatementError(res, 'NOT_PDF');
+    }
+
+    const password =
+      typeof req.body.password === 'string' ? req.body.password : undefined;
+    const { lines, pages } = await readStatementLines(file.buffer, password);
+    const statement = parseStatementLines(lines);
+
+    const payments = await Payment.find({
+      collection: req.params.collectionId,
+      status: 'pending',
+    })
+      .sort({ createdAt: -1 })
+      .lean();
+    const { summary, results } = matchPayments(payments, statement.entries);
+
+    logOutcome(
+      'OK',
+      `pages=${pages} entries=${statement.entries.length} checked=${summary.checked} ` +
+        `matched=${summary.matched} mismatched=${summary.mismatched} notFound=${summary.notFound}`
+    );
+    return res.status(200).json({
+      statement: {
+        from: statement.from,
+        to: statement.to,
+        entryCount: statement.entries.length,
+      },
+      summary,
+      results,
+    });
+  } catch (err) {
+    if (err instanceof StatementError) {
+      logOutcome(err.code);
+      return sendStatementError(res, err.code);
+    }
+    // Reader errors are all StatementErrors, so this is never statement text.
+    console.error('Error checking statement:', err.message);
+    return res.status(500).json(SERVER_ERROR);
+  }
+}
+
+const MAX_BULK_VERIFY = 200;
+const OBJECT_ID = /^[a-f0-9]{24}$/i;
+
+function validPaymentIds(ids) {
+  return (
+    Array.isArray(ids) &&
+    ids.length > 0 &&
+    ids.length <= MAX_BULK_VERIFY &&
+    new Set(ids).size === ids.length &&
+    ids.every((id) => typeof id === 'string' && OBJECT_ID.test(id))
+  );
+}
+
+/**
+ * Spec 004 US2: verify the chosen payments of one collection. Each update is
+ * conditional on the payment still awaiting verification (constitution VII),
+ * so payments another admin already reviewed are skipped and reported.
+ */
+export async function bulkVerifyPayments(req, res) {
+  try {
+    const { paymentIds } = req.body ?? {};
+    if (!validPaymentIds(paymentIds)) {
+      return res.status(400).json({
+        code: 'INVALID_PAYMENT_IDS',
+        message: `paymentIds must be 1–${MAX_BULK_VERIFY} unique payment ids.`,
+      });
+    }
+
+    const collection = await adminCollection(req, res);
+    if (!collection) return undefined;
+
+    const verified = [];
+    const skipped = [];
+    for (const paymentId of paymentIds) {
+      const updated = await Payment.findOneAndUpdate(
+        { _id: paymentId, collection: collection._id, status: 'pending' },
+        { status: 'confirmed' },
+        { new: true }
+      );
+      if (updated) {
+        verified.push(serializePayment(updated, { isAdmin: true }));
+        continue;
+      }
+      const current = await Payment.findOne({
+        _id: paymentId,
+        collection: collection._id,
+      });
+      skipped.push(
+        current
+          ? { paymentId, reason: 'ALREADY_REVIEWED', status: current.status }
+          : { paymentId, reason: 'NOT_FOUND' }
+      );
+    }
+
+    return res.status(200).json({ verified, skipped });
+  } catch (err) {
+    console.error('Error bulk verifying payments:', err.message);
+    return res.status(500).json(SERVER_ERROR);
   }
 }
