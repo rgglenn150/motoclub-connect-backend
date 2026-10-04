@@ -1,8 +1,18 @@
 import Collection from '../models/CollectionModel.js';
 import Club from '../models/ClubModel.js';
-import Payment from '../models/PaymentModel.js';
+import {
+  getProgressByCollection,
+  formatProgressText,
+  progressVersion,
+} from '../utils/collectionProgress.js';
+import {
+  CARD_WIDTH,
+  CARD_HEIGHT,
+  renderCollectionCard,
+} from '../utils/shareCard.js';
 
 const SITE_NAME = 'Motoclub Connect';
+const OBJECT_ID = /^[0-9a-fA-F]{24}$/;
 const FACEBOOK_APP_ID = process.env.FACEBOOK_APP_ID || '1515940283108537';
 
 /**
@@ -26,6 +36,16 @@ export function appBaseUrl() {
   return base.replace(/\/+$/, '');
 }
 
+/**
+ * Absolute base of this API, for og:image. `req.protocol` honours
+ * X-Forwarded-Proto because server.js trusts one proxy hop (ADR-0001).
+ */
+export function apiBaseUrl(req) {
+  const base =
+    process.env.PUBLIC_API_URL || `${req.protocol}://${req.get('host')}`;
+  return base.replace(/\/+$/, '');
+}
+
 function escapeHtml(value) {
   return String(value ?? '')
     .replace(/&/g, '&amp;')
@@ -37,15 +57,20 @@ function escapeHtml(value) {
 
 /** Open Graph descriptions are truncated by most scrapers well before this. */
 function truncate(value, max = 300) {
-  const text = String(value ?? '').replace(/\s+/g, ' ').trim();
+  const text = String(value ?? '')
+    .replace(/\s+/g, ' ')
+    .trim();
   return text.length > max ? `${text.slice(0, max - 1)}…` : text;
 }
 
-function formatPeso(amount) {
-  return `₱${Number(amount || 0).toLocaleString('en-PH')}`;
-}
-
-function renderSharePage({ title, description, image, canonicalUrl, redirectUrl }) {
+function renderSharePage({
+  title,
+  description,
+  image,
+  largeImage = false,
+  canonicalUrl,
+  redirectUrl,
+}) {
   const safe = {
     title: escapeHtml(title),
     description: escapeHtml(description),
@@ -68,10 +93,17 @@ function renderSharePage({ title, description, image, canonicalUrl, redirectUrl 
 <meta property="og:description" content="${safe.description}"/>
 <meta property="og:url" content="${safe.canonicalUrl}"/>
 <meta property="og:image" content="${safe.image}"/>
-<meta property="og:image:alt" content="${safe.title}"/>
+<meta property="og:image:alt" content="${safe.title}"/>${
+    largeImage
+      ? `
+<meta property="og:image:width" content="${CARD_WIDTH}"/>
+<meta property="og:image:height" content="${CARD_HEIGHT}"/>
+<meta property="og:image:type" content="image/png"/>`
+      : ''
+  }
 <meta property="fb:app_id" content="${escapeHtml(FACEBOOK_APP_ID)}"/>
 
-<meta name="twitter:card" content="summary"/>
+<meta name="twitter:card" content="${largeImage ? 'summary_large_image' : 'summary'}"/>
 <meta name="twitter:title" content="${safe.title}"/>
 <meta name="twitter:description" content="${safe.description}"/>
 <meta name="twitter:image" content="${safe.image}"/>
@@ -99,9 +131,10 @@ export async function renderCollectionShare(req, res) {
   let description =
     'Manage your motorcycle club — members, events, and collections — in one place.';
   let image = fallbackImage;
+  let largeImage = false;
 
   try {
-    const collection = collectionId.match(/^[0-9a-fA-F]{24}$/)
+    const collection = OBJECT_ID.test(collectionId)
       ? await Collection.findById(collectionId).lean()
       : null;
 
@@ -111,29 +144,32 @@ export async function renderCollectionShare(req, res) {
       // Only public collections get their details exposed to a scraper; a
       // members-only one keeps the generic app preview.
       if (collection.visibility === 'public') {
-        const [club, totalResult] = await Promise.all([
+        const [club, progressById] = await Promise.all([
           Club.findById(collection.club, 'clubName logoUrl').lean(),
-          Payment.aggregate([
-            { $match: { collection: collection._id } },
-            { $group: { _id: null, total: { $sum: '$amount' } } },
-          ]),
+          getProgressByCollection([collection._id]),
         ]);
 
         const clubName = club?.clubName || '';
-        const collected = totalResult[0]?.total ?? 0;
+        const progress = progressById.get(collection._id.toString());
 
         title = clubName ? `${collection.name} · ${clubName}` : collection.name;
 
-        const progress = collection.targetAmount
-          ? `${formatPeso(collected)} of ${formatPeso(collection.targetAmount)} collected.`
-          : `${formatPeso(collected)} collected so far.`;
+        const progressText = formatProgressText(
+          progress,
+          collection.targetAmount
+        );
         description = truncate(
           collection.description
-            ? `${collection.description} ${progress}`
-            : `${clubName ? `${clubName} is collecting contributions. ` : ''}${progress}`
+            ? `${collection.description} ${progressText}`
+            : `${clubName ? `${clubName} is collecting contributions. ` : ''}${progressText}`
         );
 
-        if (club?.logoUrl) image = club.logoUrl;
+        // Versioned so a chat app that re-scrapes picks up new totals (research R4).
+        const version = encodeURIComponent(
+          progressVersion(progress, collection.updatedAt)
+        );
+        image = `${apiBaseUrl(req)}/share/collection/${collection._id}/card.png?v=${version}`;
+        largeImage = true;
       }
     }
   } catch (err) {
@@ -150,5 +186,63 @@ export async function renderCollectionShare(req, res) {
   res.set('Cache-Control', 'public, max-age=300');
   return res
     .status(200)
-    .send(renderSharePage({ title, description, image, canonicalUrl, redirectUrl }));
+    .send(
+      renderSharePage({
+        title,
+        description,
+        image,
+        largeImage,
+        canonicalUrl,
+        redirectUrl,
+      })
+    );
+}
+
+/**
+ * GET /share/collection/:collectionId/card.png
+ * Public progress card (FR-011). No User-Agent check: image fetchers often
+ * identify differently from page scrapers. Only public collections get a card
+ * (FR-012); if rendering fails, fall back to an existing image (FR-013).
+ */
+export async function renderCollectionCardImage(req, res) {
+  const { collectionId } = req.params;
+  const fallbackImage = `${appBaseUrl()}/assets/icons/icon-512x512.png`;
+
+  let collection;
+  try {
+    collection = OBJECT_ID.test(collectionId)
+      ? await Collection.findById(collectionId).lean()
+      : null;
+  } catch (err) {
+    // Visibility is unknown, so only the generic icon is safe to show.
+    console.error('Error loading collection for share card:', err.message);
+    return res.redirect(302, fallbackImage);
+  }
+
+  if (!collection || collection.visibility !== 'public') {
+    return res.status(404).end();
+  }
+
+  let club = null;
+  try {
+    const [clubDoc, progressById] = await Promise.all([
+      Club.findById(collection.club, 'clubName logoUrl').lean(),
+      getProgressByCollection([collection._id]),
+    ]);
+    club = clubDoc;
+
+    const png = await renderCollectionCard({
+      collection,
+      club,
+      progress: progressById.get(collection._id.toString()),
+      fallbackLogoUrl: fallbackImage,
+    });
+
+    res.set('Content-Type', 'image/png');
+    res.set('Cache-Control', 'public, max-age=3600');
+    return res.status(200).send(png);
+  } catch (err) {
+    console.error('Error rendering collection share card:', err.message);
+    return res.redirect(302, club?.logoUrl || fallbackImage);
+  }
 }

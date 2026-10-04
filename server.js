@@ -18,6 +18,11 @@ dotenv.config();
 //express app
 const app = express();
 
+// The container is only reachable through the host's reverse proxy, so trust
+// exactly one hop: req.ip / req.protocol then reflect the real client
+// (needed by the /share rate limit and absolute og:image URLs, ADR-0001).
+app.set('trust proxy', 1);
+
 //middleware
 app.use(express.json());
 const isProduction =
