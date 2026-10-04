@@ -3,6 +3,7 @@ import Payment from '../models/PaymentModel.js';
 import Member from '../models/MemberModel.js';
 import Club from '../models/ClubModel.js';
 import cloudinary from '../utils/cloudinary.js';
+import { getProgressByCollection } from '../utils/collectionProgress.js';
 
 async function isClubAdmin(clubId, userId) {
   const membership = await Member.findOne({ club: clubId, user: userId, roles: 'admin' });
@@ -25,24 +26,25 @@ export async function getCollectionsByClub(req, res) {
 
     const clubName = clubDoc?.clubName ?? '';
 
-    // For each collection, compute totalCollected and paymentCount
-    const enriched = await Promise.all(
-      collections.map(async (col) => {
-        const [paymentCount, totalResult] = await Promise.all([
-          Payment.countDocuments({ collection: col._id }),
-          Payment.aggregate([
-            { $match: { collection: col._id } },
-            { $group: { _id: null, total: { $sum: '$amount' } } },
-          ]),
-        ]);
-        return {
-          ...col,
-          clubName,
-          paymentCount,
-          totalCollected: totalResult[0]?.total ?? 0,
-        };
-      })
-    );
+    // Confirmed and pending totals come from the same helper as the share
+    // preview, so the numbers always match (spec 001, FR-009). totalCollected
+    // is kept for cached app builds and now equals confirmedTotal (research R7).
+    const [progressById, paymentCounts] = await Promise.all([
+      getProgressByCollection(collections.map((col) => col._id)),
+      Promise.all(collections.map((col) => Payment.countDocuments({ collection: col._id }))),
+    ]);
+
+    const enriched = collections.map((col, i) => {
+      const { confirmedTotal, pendingTotal } = progressById.get(col._id.toString());
+      return {
+        ...col,
+        clubName,
+        paymentCount: paymentCounts[i],
+        confirmedTotal,
+        pendingTotal,
+        totalCollected: confirmedTotal,
+      };
+    });
 
     return res.status(200).json({ collections: enriched });
   } catch (err) {
@@ -75,7 +77,13 @@ export async function createCollection(req, res) {
     await collection.save();
 
     // Return with computed fields
-    const result = { ...collection.toObject(), paymentCount: 0, totalCollected: 0 };
+    const result = {
+      ...collection.toObject(),
+      paymentCount: 0,
+      confirmedTotal: 0,
+      pendingTotal: 0,
+      totalCollected: 0,
+    };
     return res.status(201).json({ collection: result });
   } catch (err) {
     console.error('Error creating collection:', err.message);

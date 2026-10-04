@@ -10,12 +10,18 @@ import notificationRoutes from './routes/notification.js';
 import officialMemberRouter from './routes/official-member.js';
 import paymentRoutes from './routes/payment.js';
 import collectionRoutes from './routes/collection.js';
+import shareRoutes from './routes/share.js';
 import cors from 'cors';
 
 dotenv.config();
 
 //express app
 const app = express();
+
+// The container is only reachable through the host's reverse proxy, so trust
+// exactly one hop: req.ip / req.protocol then reflect the real client
+// (needed by the /share rate limit and absolute og:image URLs, ADR-0001).
+app.set('trust proxy', 1);
 
 //middleware
 app.use(express.json());
@@ -105,6 +111,8 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/official-member', officialMemberRouter);
 app.use('/api/payment', paymentRoutes);
 app.use('/api/collection', collectionRoutes);
+// Server-rendered link previews (Open Graph) for social scrapers.
+app.use('/share', shareRoutes);
 app.get('/api/wakeup', (req, res) => {
   res.json({ message: 'Server is awake and ready.' });
 });

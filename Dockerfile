@@ -4,6 +4,12 @@ FROM node:18-slim
 # --- 2. Setup Work Directory ---
 WORKDIR /app
 
+# Fonts for SVG text rendered by sharp/librsvg (share cards, ID cards).
+# node:18-slim ships none, so text would render blank. DejaVu covers ₱.
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends fonts-dejavu-core fontconfig-config \
+  && rm -rf /var/lib/apt/lists/*
+
 # --- 3. Install Dependencies ---
 # We copy ONLY package.json first to cache the install step
 COPY package*.json ./

@@ -251,13 +251,14 @@ class IDCardService {
   /**
    * Fetch image from URL and return as buffer
    * @param {string} imageUrl - URL of the image
+   * @param {{ timeout?: number }} [options] - request timeout in ms (default 10 s)
    * @returns {Promise<Buffer>} Image buffer
    */
-  static async fetchImageBuffer(imageUrl) {
+  static async fetchImageBuffer(imageUrl, { timeout = 10000 } = {}) {
     try {
       const response = await axios.get(imageUrl, {
         responseType: 'arraybuffer',
-        timeout: 10000,
+        timeout,
       });
       return Buffer.from(response.data);
     } catch (error) {
@@ -270,15 +271,16 @@ class IDCardService {
    * Returns null when the URL is missing or unreachable so the card falls back
    * to its placeholder rather than failing to generate at all.
    * @param {string} imageUrl - URL of the image
+   * @param {{ timeout?: number }} [options] - passed to fetchImageBuffer
    * @returns {Promise<string|null>} Data URI, or null if unavailable
    */
-  static async fetchImageAsDataUri(imageUrl) {
+  static async fetchImageAsDataUri(imageUrl, options = {}) {
     if (!imageUrl) {
       return null;
     }
 
     try {
-      const buffer = await this.fetchImageBuffer(imageUrl);
+      const buffer = await this.fetchImageBuffer(imageUrl, options);
       // Normalise to PNG so the declared mime type is always correct
       const png = await sharp(buffer).png().toBuffer();
       return `data:image/png;base64,${png.toString('base64')}`;
