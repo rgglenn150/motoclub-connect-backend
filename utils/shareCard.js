@@ -117,7 +117,7 @@ export function buildCardSvg({
   targetAmount,
 }) {
   const percents = progressPercents(progress, targetAmount);
-  // Awaiting first, then verified (spec 003 FR-003); the bar is unchanged.
+  // Pending first, then verified (spec 003 FR-003); the bar is unchanged.
   const amounts = [];
   if (progress.pendingTotal > 0)
     amounts.push(

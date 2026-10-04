@@ -41,8 +41,8 @@ describe('utils/shareCard', () => {
 
       expect(confirmed / track).to.be.closeTo(0.45, 0.001);
       expect(pending / track).to.be.closeTo(0.12, 0.001);
-      // Spec 003: awaiting first, new words; bar drawing unchanged.
-      expect(svg).to.include('₱1,200 awaiting verification · ₱4,500 verified');
+      // Specs 003 + 006: pending first, display words; bar drawing unchanged.
+      expect(svg).to.include('₱1,200 pending · ₱4,500 verified');
       expect(svg).to.include('of ₱10,000 target');
     });
 
@@ -61,7 +61,7 @@ describe('utils/shareCard', () => {
       );
 
       expect(barWidths(svg)).to.not.have.property('pending');
-      expect(svg).to.not.include('awaiting');
+      expect(svg).to.not.include('pending ·');
       expect(svg).to.include('₱4,500 verified');
     });
 
@@ -74,7 +74,7 @@ describe('utils/shareCard', () => {
       );
 
       expect(svg).to.not.include('bar-track');
-      expect(svg).to.include('₱250 awaiting verification · ₱500 verified');
+      expect(svg).to.include('₱250 pending · ₱500 verified');
       expect(svg).to.not.include('target');
     });
 

@@ -1,9 +1,11 @@
+import mongoose from 'mongoose';
 import Collection from '../models/CollectionModel.js';
 import Payment from '../models/PaymentModel.js';
 import Member from '../models/MemberModel.js';
 import Club from '../models/ClubModel.js';
 import cloudinary from '../utils/cloudinary.js';
 import { getProgressByCollection } from '../utils/collectionProgress.js';
+import { isValidAmount } from '../utils/amount.js';
 
 async function isClubAdmin(clubId, userId) {
   const membership = await Member.findOne({ club: clubId, user: userId, roles: 'admin' });
@@ -91,12 +93,58 @@ export async function createCollection(req, res) {
   }
 }
 
+const NAME_MAX = 100;
+const DESCRIPTION_MAX = 500;
+
+/**
+ * Checks an edit of name, description, target and visibility (spec 006
+ * FR-006, contracts §1). Returns trimmed values to apply, or every failing
+ * field with its message. Fields that can't be edited are ignored.
+ */
+function validateCollectionEdit(body = {}) {
+  const errors = {};
+  const values = {};
+
+  const name = typeof body.name === 'string' ? body.name.trim() : '';
+  if (!name) errors.name = 'Name is required.';
+  else if (name.length > NAME_MAX)
+    errors.name = `Name must be ${NAME_MAX} characters or fewer.`;
+  else values.name = name;
+
+  if (body.description !== undefined) {
+    const description =
+      typeof body.description === 'string' ? body.description.trim() : null;
+    if (description === null || description.length > DESCRIPTION_MAX)
+      errors.description = `Description must be ${DESCRIPTION_MAX} characters or fewer.`;
+    else values.description = description || undefined;
+  }
+
+  if (body.targetAmount === null) values.targetAmount = undefined;
+  else if (body.targetAmount !== undefined && isValidAmount(body.targetAmount))
+    values.targetAmount = Number(body.targetAmount);
+  else if (body.targetAmount !== undefined)
+    errors.targetAmount =
+      'Target must be a positive amount up to ₱10,000,000 with at most 2 decimals.';
+
+  if (['public', 'members_only'].includes(body.visibility))
+    values.visibility = body.visibility;
+  else errors.visibility = 'Visibility must be public or members only.';
+
+  if (body.status !== undefined) {
+    if (['open', 'closed'].includes(body.status)) values.status = body.status;
+    else errors.status = 'Status must be open or closed.';
+  }
+
+  return { values, errors };
+}
+
 export async function updateCollection(req, res) {
   try {
     const { collectionId } = req.params;
-    const { name, description, targetAmount, status, visibility } = req.body;
 
-    const collection = await Collection.findById(collectionId);
+    const collection = mongoose.isValidObjectId(collectionId)
+      ? await Collection.findById(collectionId)
+      : null;
     if (!collection) {
       return res.status(404).json({ message: 'Collection not found' });
     }
@@ -105,11 +153,19 @@ export async function updateCollection(req, res) {
       return res.status(403).json({ message: 'Only club admins can update collections' });
     }
 
-    if (name !== undefined) collection.name = name;
-    if (description !== undefined) collection.description = description;
-    if (targetAmount !== undefined) collection.targetAmount = targetAmount;
-    if (status !== undefined) collection.status = status;
-    if (visibility !== undefined) collection.visibility = visibility;
+    const { values, errors } = validateCollectionEdit(req.body);
+    if (Object.keys(errors).length) {
+      return res.status(400).json({
+        code: 'INVALID_COLLECTION',
+        message: 'Please fix the highlighted fields.',
+        errors,
+      });
+    }
+
+    // `undefined` unsets an optional field (cleared target or description).
+    for (const [field, value] of Object.entries(values)) {
+      collection[field] = value;
+    }
 
     await collection.save();
     return res.status(200).json({ collection });

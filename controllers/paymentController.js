@@ -5,6 +5,7 @@ import Member from '../models/MemberModel.js';
 import cloudinary from '../utils/cloudinary.js';
 import { STATUS_LABEL } from '../utils/collectionProgress.js';
 import { serializePayment } from '../utils/paymentView.js';
+import { isValidAmount } from '../utils/amount.js';
 import {
   readStatementLines,
   parseStatementLines,
@@ -59,17 +60,6 @@ export async function getPaymentsByCollection(req, res) {
       .status(500)
       .json({ message: 'Server Error', error: err.message });
   }
-}
-
-const MAX_PAYMENT_AMOUNT = 10_000_000;
-
-/** Positive, at most two decimals, at most ₱10,000,000 (strings from multipart forms included). */
-function isValidAmount(amount) {
-  if (typeof amount !== 'number' && typeof amount !== 'string') return false;
-  const text = String(amount).trim();
-  if (!/^\d+(\.\d{1,2})?$/.test(text)) return false;
-  const value = Number(text);
-  return value > 0 && value <= MAX_PAYMENT_AMOUNT;
 }
 
 export async function createPayment(req, res) {
@@ -522,7 +512,7 @@ function validPaymentIds(ids) {
 
 /**
  * Spec 004 US2: verify the chosen payments of one collection. Each update is
- * conditional on the payment still awaiting verification (constitution VII),
+ * conditional on the payment still being pending (constitution VII),
  * so payments another admin already reviewed are skipped and reported.
  */
 export async function bulkVerifyPayments(req, res) {
