@@ -154,7 +154,13 @@ export async function renderCollectionCard({
   progress,
   fallbackLogoUrl,
 }) {
-  const key = `${collection._id}:${progressVersion(progress, collection.updatedAt)}`;
+  // The club's name and logo are drawn on the card, so they are part of the key.
+  const key = [
+    collection._id,
+    progressVersion(progress, collection.updatedAt),
+    club?.clubName ?? '',
+    club?.logoUrl ?? '',
+  ].join(':');
   if (cache.has(key)) {
     const hit = cache.get(key);
     cache.delete(key);

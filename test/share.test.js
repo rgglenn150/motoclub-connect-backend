@@ -8,6 +8,7 @@ import Club from '../models/ClubModel.js';
 import Payment from '../models/PaymentModel.js';
 import IDCardService from '../utils/idCardService.js';
 import { clearCardCache } from '../utils/shareCard.js';
+import { resetApiUrlWarning } from '../controllers/shareController.js';
 
 const FB_UA =
   'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)';
@@ -184,7 +185,8 @@ describe('GET /share/collection/:collectionId', () => {
       .get(`/share/collection/${COLLECTION_ID}`)
       .set('User-Agent', FB_UA);
 
-    expect(res.text).to.not.include('<script>alert');
+    // The only raw <script> is the page's own redirect.
+    expect(res.text.match(/<script>/g)).to.have.length(1);
     expect(res.text).to.include('Ride &quot;2025&quot; &lt;script&gt;');
     expect(res.text).to.include('Bring &amp; share');
   });
@@ -296,6 +298,30 @@ describe('GET /share/collection/:collectionId', () => {
     expect(res.headers.location).to.not.include('/clubs/');
   });
 
+  it('warns once when PUBLIC_API_URL is missing in production', async () => {
+    delete process.env.PUBLIC_API_URL;
+    const previousEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'production';
+    const warn = sinon.stub(console, 'warn');
+    resetApiUrlWarning();
+    stubCollection(PUBLIC_COLLECTION);
+
+    try {
+      for (let i = 0; i < 2; i += 1) {
+        await request(app)
+          .get(`/share/collection/${COLLECTION_ID}`)
+          .set('User-Agent', FB_UA);
+      }
+    } finally {
+      process.env.NODE_ENV = previousEnv;
+    }
+
+    const warnings = warn
+      .getCalls()
+      .filter((c) => String(c.args[0]).includes('PUBLIC_API_URL'));
+    expect(warnings).to.have.length(1);
+  });
+
   it('falls back to the app preview for an unknown collection', async () => {
     const res = await request(app)
       .get('/share/collection/not-an-id')
@@ -328,12 +354,10 @@ describe('GET /share/collection/:collectionId/card.png', function () {
 
   it('returns 404 for members-only, unknown, deleted and malformed collections', async () => {
     const findById = sinon.stub(Collection, 'findById');
-    findById
-      .onFirstCall()
-      .returns({
-        lean: () =>
-          Promise.resolve({ ...PUBLIC_COLLECTION, visibility: 'members_only' }),
-      });
+    findById.onFirstCall().returns({
+      lean: () =>
+        Promise.resolve({ ...PUBLIC_COLLECTION, visibility: 'members_only' }),
+    });
     findById.onSecondCall().returns({ lean: () => Promise.resolve(null) });
     const render = sinon
       .stub(IDCardService, 'fetchImageAsDataUri')

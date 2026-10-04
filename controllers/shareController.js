@@ -41,9 +41,27 @@ export function appBaseUrl() {
  * X-Forwarded-Proto because server.js trusts one proxy hop (ADR-0001).
  */
 export function apiBaseUrl(req) {
+  if (!process.env.PUBLIC_API_URL) warnMissingApiUrl();
   const base =
     process.env.PUBLIC_API_URL || `${req.protocol}://${req.get('host')}`;
   return base.replace(/\/+$/, '');
+}
+
+// Without PUBLIC_API_URL the og:image host comes from the request's Host
+// header, which a client controls. Fine locally; say so once in production.
+let apiUrlWarned = false;
+function warnMissingApiUrl() {
+  const env = process.env.NODE_ENV;
+  if (apiUrlWarned || env === 'development' || env === 'test') return;
+  apiUrlWarned = true;
+  console.warn(
+    'PUBLIC_API_URL is not set: share previews build og:image URLs from the Host header. Set it in production.'
+  );
+}
+
+/** Test hook: let the one-time warning fire again. */
+export function resetApiUrlWarning() {
+  apiUrlWarned = false;
 }
 
 function escapeHtml(value) {
@@ -184,18 +202,16 @@ export async function renderCollectionShare(req, res) {
 
   res.set('Content-Type', 'text/html; charset=utf-8');
   res.set('Cache-Control', 'public, max-age=300');
-  return res
-    .status(200)
-    .send(
-      renderSharePage({
-        title,
-        description,
-        image,
-        largeImage,
-        canonicalUrl,
-        redirectUrl,
-      })
-    );
+  return res.status(200).send(
+    renderSharePage({
+      title,
+      description,
+      image,
+      largeImage,
+      canonicalUrl,
+      redirectUrl,
+    })
+  );
 }
 
 /**

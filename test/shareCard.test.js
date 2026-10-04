@@ -227,6 +227,34 @@ describe('utils/shareCard', () => {
       expect(fetch.callCount).to.equal(2);
     });
 
+    it('renders a fresh card when the club logo or name changes', async () => {
+      const fetch = sinon
+        .stub(IDCardService, 'fetchImageAsDataUri')
+        .resolves(logoDataUri);
+
+      await renderCollectionCard({
+        collection,
+        club,
+        progress,
+        fallbackLogoUrl,
+      });
+      await renderCollectionCard({
+        collection,
+        club: { ...club, logoUrl: `${club.logoUrl}?v=2` },
+        progress,
+        fallbackLogoUrl,
+      });
+      await renderCollectionCard({
+        collection,
+        club: { ...club, clubName: 'Iron Riders MC' },
+        progress,
+        fallbackLogoUrl,
+      });
+
+      expect(fetch.callCount).to.equal(3);
+      expect(cardCacheSize()).to.equal(3);
+    });
+
     it(`keeps at most ${CARD_CACHE_LIMIT} cards`, async () => {
       sinon.stub(IDCardService, 'fetchImageAsDataUri').resolves(null);
 
