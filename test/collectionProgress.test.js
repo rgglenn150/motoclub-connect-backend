@@ -7,6 +7,7 @@ import {
   progressPercents,
   formatProgressText,
   progressVersion,
+  STATUS_LABEL,
 } from '../utils/collectionProgress.js';
 
 const A = new mongoose.Types.ObjectId('507f191e810c19729de860ea');
@@ -103,32 +104,55 @@ describe('utils/collectionProgress', () => {
     });
   });
 
+  describe('STATUS_LABEL (spec 003)', () => {
+    it('names statuses the way people see them', () => {
+      expect(STATUS_LABEL.confirmed).to.deep.equal({
+        title: 'Verified',
+        lower: 'verified',
+      });
+      expect(STATUS_LABEL.pending).to.deep.equal({
+        title: 'Awaiting Verification',
+        lower: 'awaiting verification',
+      });
+      expect(STATUS_LABEL.rejected).to.deep.equal({
+        title: 'Rejected',
+        lower: 'rejected',
+      });
+    });
+  });
+
   describe('formatProgressText', () => {
-    it('reports confirmed and pending against the target', () => {
+    it('lists the awaiting amount before the verified amount', () => {
       expect(
-        formatProgressText({ confirmedTotal: 4500, pendingTotal: 1200 }, 10000)
-      ).to.equal('₱4,500 confirmed + ₱1,200 pending of ₱10,000.');
+        formatProgressText({ confirmedTotal: 4500, pendingTotal: 1200 }, 12000)
+      ).to.equal('₱1,200 awaiting verification + ₱4,500 verified of ₱12,000.');
     });
 
-    it('drops the pending part when nothing is pending', () => {
+    it('drops the awaiting part when nothing is awaiting', () => {
       expect(
-        formatProgressText({ confirmedTotal: 4500, pendingTotal: 0 }, 10000)
-      ).to.equal('₱4,500 confirmed of ₱10,000.');
+        formatProgressText({ confirmedTotal: 4500, pendingTotal: 0 }, 12000)
+      ).to.equal('₱4,500 verified of ₱12,000.');
+    });
+
+    it('always shows the verified amount, even at ₱0', () => {
+      expect(
+        formatProgressText({ confirmedTotal: 0, pendingTotal: 1200 }, 12000)
+      ).to.equal('₱1,200 awaiting verification + ₱0 verified of ₱12,000.');
     });
 
     it('says "so far" without a target', () => {
       expect(
         formatProgressText({ confirmedTotal: 500, pendingTotal: 0 })
-      ).to.equal('₱500 confirmed so far.');
+      ).to.equal('₱500 verified so far.');
       expect(
         formatProgressText({ confirmedTotal: 500, pendingTotal: 250 })
-      ).to.equal('₱500 confirmed + ₱250 pending so far.');
+      ).to.equal('₱250 awaiting verification + ₱500 verified so far.');
     });
 
     it('keeps centavos only when the amount has them', () => {
       expect(
         formatProgressText({ confirmedTotal: 1234.5, pendingTotal: 0 })
-      ).to.equal('₱1,234.50 confirmed so far.');
+      ).to.equal('₱1,234.50 verified so far.');
     });
   });
 
