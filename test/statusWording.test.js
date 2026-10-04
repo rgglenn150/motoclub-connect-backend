@@ -5,11 +5,12 @@ import {
 } from '../utils/collectionProgress.js';
 import { buildCardSvg } from '../utils/shareCard.js';
 
-// Spec 003 SC-001 / red-team F4: people never see the stored status words, and
-// the awaiting amount always comes before the verified amount. Checks rendered
-// output, not source text, so internal enum values ('confirmed', 'pending') and
-// SVG element ids are allowed to stay as they are.
-const OLD_WORDS = /\bconfirmed\b|\bpending\b/i;
+// Spec 003 SC-001 / red-team F4, as amended by spec 006 D6: people see
+// "verified" (never the stored "confirmed") and "pending" (never the retired
+// "awaiting verification"), with the pending amount before the verified one.
+// Checks rendered output, not source text, so internal enum values and SVG
+// element ids are allowed to stay as they are.
+const OLD_WORDS = /\bconfirmed\b|awaiting/i;
 
 // Visible SVG text only (drop tags and attribute values such as id="bar-pending").
 const visibleText = (svg) =>
@@ -24,9 +25,9 @@ for (const pendingTotal of [0, 1200, 121200.75]) {
   }
 }
 
-describe('status wording (spec 003)', () => {
+describe('status wording (specs 003 + 006)', () => {
   for (const { pendingTotal, confirmedTotal, targetAmount } of combos) {
-    const label = `awaiting ${pendingTotal}, verified ${confirmedTotal}, target ${targetAmount ?? 'none'}`;
+    const label = `pending ${pendingTotal}, verified ${confirmedTotal}, target ${targetAmount ?? 'none'}`;
     const progress = { confirmedTotal, pendingTotal };
 
     it(`progress text and card: ${label}`, () => {
@@ -44,11 +45,12 @@ describe('status wording (spec 003)', () => {
         expect(output).to.not.match(OLD_WORDS);
         expect(output).to.include('verified');
         if (pendingTotal > 0) {
-          expect(output.indexOf('awaiting verification')).to.be.below(
+          expect(output).to.include(' pending');
+          expect(output.indexOf(' pending')).to.be.below(
             output.indexOf(' verified')
           );
         } else {
-          expect(output).to.not.include('awaiting');
+          expect(output).to.not.include('pending');
         }
       }
     });

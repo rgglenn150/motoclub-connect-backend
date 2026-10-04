@@ -104,15 +104,16 @@ describe('utils/collectionProgress', () => {
     });
   });
 
-  describe('STATUS_LABEL (spec 003)', () => {
+  describe('STATUS_LABEL (specs 003 + 006)', () => {
     it('names statuses the way people see them', () => {
       expect(STATUS_LABEL.confirmed).to.deep.equal({
         title: 'Verified',
         lower: 'verified',
       });
+      // Spec 006 D6: "Pending" replaces "Awaiting Verification".
       expect(STATUS_LABEL.pending).to.deep.equal({
-        title: 'Awaiting Verification',
-        lower: 'awaiting verification',
+        title: 'Pending',
+        lower: 'pending',
       });
       expect(STATUS_LABEL.rejected).to.deep.equal({
         title: 'Rejected',
@@ -122,13 +123,13 @@ describe('utils/collectionProgress', () => {
   });
 
   describe('formatProgressText', () => {
-    it('lists the awaiting amount before the verified amount', () => {
+    it('lists the pending amount before the verified amount', () => {
       expect(
         formatProgressText({ confirmedTotal: 4500, pendingTotal: 1200 }, 12000)
-      ).to.equal('₱1,200 awaiting verification + ₱4,500 verified of ₱12,000.');
+      ).to.equal('₱1,200 pending + ₱4,500 verified of ₱12,000.');
     });
 
-    it('drops the awaiting part when nothing is awaiting', () => {
+    it('drops the pending part when nothing is pending', () => {
       expect(
         formatProgressText({ confirmedTotal: 4500, pendingTotal: 0 }, 12000)
       ).to.equal('₱4,500 verified of ₱12,000.');
@@ -137,7 +138,7 @@ describe('utils/collectionProgress', () => {
     it('always shows the verified amount, even at ₱0', () => {
       expect(
         formatProgressText({ confirmedTotal: 0, pendingTotal: 1200 }, 12000)
-      ).to.equal('₱1,200 awaiting verification + ₱0 verified of ₱12,000.');
+      ).to.equal('₱1,200 pending + ₱0 verified of ₱12,000.');
     });
 
     it('says "so far" without a target', () => {
@@ -146,7 +147,7 @@ describe('utils/collectionProgress', () => {
       ).to.equal('₱500 verified so far.');
       expect(
         formatProgressText({ confirmedTotal: 500, pendingTotal: 250 })
-      ).to.equal('₱250 awaiting verification + ₱500 verified so far.');
+      ).to.equal('₱250 pending + ₱500 verified so far.');
     });
 
     it('keeps centavos only when the amount has them', () => {
