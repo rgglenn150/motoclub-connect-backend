@@ -84,6 +84,46 @@ export function progressPercents(
   return { confirmedPct, pendingPct };
 }
 
+/**
+ * Without a target the bar splits the money collected so far into verified and
+ * pending (spec 007 D1, research R2). Negative amounts count as 0. Shares are
+ * whole percentages for labels that always add up to 100; a positive share
+ * under 1% reads "<1%" (counted as 1). Same rule as the app's
+ * collection-progress component.
+ */
+export function progressSplit({ confirmedTotal, pendingTotal }) {
+  const confirmed = Math.max(0, Number(confirmedTotal) || 0);
+  const pending = Math.max(0, Number(pendingTotal) || 0);
+  const total = confirmed + pending;
+  if (total === 0) {
+    return { confirmedPct: 0, pendingPct: 0, confirmedShare: null, pendingShare: null };
+  }
+  const confirmedPct = (confirmed / total) * 100;
+  const pendingPct = 100 - confirmedPct;
+
+  let confirmedWhole = Math.round(confirmedPct);
+  if (pending > 0 && confirmedWhole === 100) confirmedWhole = 99;
+  if (confirmed > 0 && confirmedWhole === 0) confirmedWhole = 1;
+  const pendingWhole = 100 - confirmedWhole;
+  const share = (amount, whole, pct) =>
+    amount > 0 && pct < 1 ? '<1%' : `${whole}%`;
+
+  return {
+    confirmedPct,
+    pendingPct,
+    confirmedShare: share(confirmed, confirmedWhole, confirmedPct),
+    pendingShare: share(pending, pendingWhole, pendingPct),
+  };
+}
+
+/** What the bar measures: toward a positive target, or the split of collected money (spec 007). */
+export function progressBar(progress, targetAmount) {
+  const toward = progressPercents(progress, targetAmount);
+  return toward
+    ? { mode: 'target', ...toward }
+    : { mode: 'split', ...progressSplit(progress) };
+}
+
 /** ₱ with en-PH grouping; centavos only when the amount has them. */
 export function formatPeso(amount) {
   const value = Number(amount || 0);

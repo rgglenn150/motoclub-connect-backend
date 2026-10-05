@@ -11,7 +11,15 @@ import {
   renderCollectionCard,
   clearCardCache,
   cardCacheSize,
+  cardCacheKey,
+  CARD_LAYOUT,
 } from '../utils/shareCard.js';
+import fs from 'node:fs';
+
+// Captured from the card code before spec 007 (tasks T003).
+const TARGET_MODE = JSON.parse(
+  fs.readFileSync(new URL('./fixtures/card-target-mode.svg.json', import.meta.url))
+);
 
 const BAR_WIDTH = /id="bar-(track|confirmed|pending)"[^>]*width="([\d.]+)"/g;
 
@@ -65,17 +73,49 @@ describe('utils/shareCard', () => {
       expect(svg).to.include('₱4,500 verified');
     });
 
-    it('shows amounts without a bar when there is no target', () => {
-      const svg = buildCardSvg(
-        card({
-          targetAmount: undefined,
-          progress: { confirmedTotal: 500, pendingTotal: 250 },
-        })
-      );
+    it('keeps target cards byte-identical to before spec 007 (red-team F1)', () => {
+      for (const { input, svg } of Object.values(TARGET_MODE)) {
+        expect(buildCardSvg(input)).to.equal(svg);
+      }
+    });
 
-      expect(svg).to.not.include('bar-track');
-      expect(svg).to.include('₱250 pending · ₱500 verified');
-      expect(svg).to.not.include('target');
+    describe('without a target: verified vs pending split (spec 007)', () => {
+      const split = (progress) =>
+        buildCardSvg(card({ targetAmount: undefined, progress }));
+
+      it('draws the caption and a split bar above the unchanged amounts line (US2 AC1)', () => {
+        const svg = split({ confirmedTotal: 4500, pendingTotal: 1200 });
+        const widths = barWidths(svg);
+
+        expect(svg).to.include('>Verified vs pending</text>');
+        expect(widths.track).to.equal(1040);
+        expect(widths.confirmed).to.be.closeTo(1040 * 0.78947, 0.1);
+        expect(widths.pending).to.be.closeTo(1040 * 0.21053, 0.1);
+        expect(svg).to.include('₱1,200 pending · ₱4,500 verified');
+        expect(svg).to.match(/y="500"[^>]*>₱1,200 pending/);
+        expect(svg).to.not.include('target');
+      });
+
+      it('draws an empty track with the caption when nothing is collected (US2 AC2)', () => {
+        const svg = split({ confirmedTotal: 0, pendingTotal: 0 });
+        const widths = barWidths(svg);
+
+        expect(svg).to.include('Verified vs pending');
+        expect(widths.track).to.equal(1040);
+        expect(widths.confirmed ?? 0).to.equal(0);
+        expect(widths.pending).to.equal(undefined);
+        expect(svg).to.include('₱0 verified');
+      });
+
+      it('keeps a tiny share at least 4px wide (FR-004)', () => {
+        const widths = barWidths(split({ confirmedTotal: 100000, pendingTotal: 1 }));
+        expect(widths.pending).to.be.at.least(4);
+        expect(widths.confirmed + widths.pending).to.be.closeTo(1040, 0.001);
+      });
+
+      it('has no caption on target cards (US2 AC3)', () => {
+        expect(buildCardSvg(card())).to.not.include('Verified vs pending');
+      });
     });
 
     it('shrinks the amounts line so long amounts stay on the card (spec 003)', () => {
@@ -247,6 +287,11 @@ describe('utils/shareCard', () => {
 
       expect(second).to.equal(first);
       expect(fetch.callCount).to.equal(2);
+    });
+
+    it('includes the card layout version in the cache key (spec 007 R5)', () => {
+      expect(CARD_LAYOUT).to.equal('2');
+      expect(cardCacheKey({ collection, club, progress }).split(':')).to.include(CARD_LAYOUT);
     });
 
     it('renders a fresh card when the club logo or name changes', async () => {

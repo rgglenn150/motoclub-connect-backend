@@ -41,7 +41,9 @@ describe('status wording (specs 003 + 006)', () => {
         })
       );
 
-      for (const output of [text, card]) {
+      // The no-target caption "Verified vs pending" (spec 007) names both
+      // statuses by design; the amount rules apply to the rest.
+      for (const output of [text, card.replace('Verified vs pending', '')]) {
         expect(output).to.not.match(OLD_WORDS);
         expect(output).to.include('verified');
         if (pendingTotal > 0) {
