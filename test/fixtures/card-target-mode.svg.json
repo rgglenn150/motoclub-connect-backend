@@ -1,0 +1,28 @@
+{
+  "withPending": {
+    "input": {
+      "collectionName": "Demo Fund",
+      "clubName": "Demo Riders",
+      "logoDataUri": null,
+      "progress": {
+        "confirmedTotal": 4500,
+        "pendingTotal": 1200
+      },
+      "targetAmount": 10000
+    },
+    "svg": "<svg width=\"1200\" height=\"630\" viewBox=\"0 0 1200 630\" xmlns=\"http://www.w3.org/2000/svg\">\n  <rect width=\"1200\" height=\"630\" fill=\"#0f172a\"/>\n  \n  <circle id=\"logo-monogram\" cx=\"160\" cy=\"160\" r=\"80\" fill=\"#1e293b\"/>\n  <text x=\"160\" y=\"188\" font-family=\"DejaVu Sans, Arial, sans-serif\" font-size=\"80\" font-weight=\"bold\"\n        fill=\"#f59e0b\" text-anchor=\"middle\">D</text>\n  <text x=\"280\" y=\"150\" font-family=\"DejaVu Sans, Arial, sans-serif\" font-size=\"56\" font-weight=\"bold\" fill=\"#ffffff\">Demo Fund</text>\n  <text x=\"280\" y=\"210\" font-family=\"DejaVu Sans, Arial, sans-serif\" font-size=\"32\" fill=\"#94a3b8\">Demo Riders</text>\n  \n  <clipPath id=\"bar-clip\"><rect x=\"80\" y=\"380\" width=\"1040\" height=\"40\" rx=\"20\"/></clipPath>\n  <g clip-path=\"url(#bar-clip)\">\n    <rect id=\"bar-track\" x=\"80\" y=\"380\" width=\"1040\" height=\"40\" fill=\"#1e293b\"/>\n    <rect id=\"bar-confirmed\" x=\"80\" y=\"380\" width=\"468\" height=\"40\" fill=\"#f59e0b\"/>\n    <rect id=\"bar-pending\" x=\"548\" y=\"380\" width=\"124.8\" height=\"40\" fill=\"#f59e0b\" fill-opacity=\"0.4\"/>\n  </g>\n  <text x=\"80\" y=\"500\" font-family=\"DejaVu Sans, Arial, sans-serif\" font-size=\"44\" font-weight=\"bold\" fill=\"#ffffff\">₱1,200 pending · ₱4,500 verified</text>\n  <text x=\"80\" y=\"556\" font-family=\"DejaVu Sans, Arial, sans-serif\" font-size=\"32\" fill=\"#94a3b8\">of ₱10,000 target</text>\n  <text x=\"1120\" y=\"590\" font-family=\"DejaVu Sans, Arial, sans-serif\" font-size=\"24\" fill=\"#94a3b8\" text-anchor=\"end\">Motoclub Connect</text>\n</svg>"
+  },
+  "noPending": {
+    "input": {
+      "collectionName": "Demo Fund",
+      "clubName": "Demo Riders",
+      "logoDataUri": null,
+      "progress": {
+        "confirmedTotal": 4500,
+        "pendingTotal": 0
+      },
+      "targetAmount": 10000
+    },
+    "svg": "<svg width=\"1200\" height=\"630\" viewBox=\"0 0 1200 630\" xmlns=\"http://www.w3.org/2000/svg\">\n  <rect width=\"1200\" height=\"630\" fill=\"#0f172a\"/>\n  \n  <circle id=\"logo-monogram\" cx=\"160\" cy=\"160\" r=\"80\" fill=\"#1e293b\"/>\n  <text x=\"160\" y=\"188\" font-family=\"DejaVu Sans, Arial, sans-serif\" font-size=\"80\" font-weight=\"bold\"\n        fill=\"#f59e0b\" text-anchor=\"middle\">D</text>\n  <text x=\"280\" y=\"150\" font-family=\"DejaVu Sans, Arial, sans-serif\" font-size=\"56\" font-weight=\"bold\" fill=\"#ffffff\">Demo Fund</text>\n  <text x=\"280\" y=\"210\" font-family=\"DejaVu Sans, Arial, sans-serif\" font-size=\"32\" fill=\"#94a3b8\">Demo Riders</text>\n  \n  <clipPath id=\"bar-clip\"><rect x=\"80\" y=\"380\" width=\"1040\" height=\"40\" rx=\"20\"/></clipPath>\n  <g clip-path=\"url(#bar-clip)\">\n    <rect id=\"bar-track\" x=\"80\" y=\"380\" width=\"1040\" height=\"40\" fill=\"#1e293b\"/>\n    <rect id=\"bar-confirmed\" x=\"80\" y=\"380\" width=\"468\" height=\"40\" fill=\"#f59e0b\"/>\n    \n  </g>\n  <text x=\"80\" y=\"500\" font-family=\"DejaVu Sans, Arial, sans-serif\" font-size=\"44\" font-weight=\"bold\" fill=\"#ffffff\">₱4,500 verified</text>\n  <text x=\"80\" y=\"556\" font-family=\"DejaVu Sans, Arial, sans-serif\" font-size=\"32\" fill=\"#94a3b8\">of ₱10,000 target</text>\n  <text x=\"1120\" y=\"590\" font-family=\"DejaVu Sans, Arial, sans-serif\" font-size=\"24\" fill=\"#94a3b8\" text-anchor=\"end\">Motoclub Connect</text>\n</svg>"
+  }
+}

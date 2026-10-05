@@ -2,7 +2,7 @@ import sharp from 'sharp';
 import IDCardService from './idCardService.js';
 import {
   formatPeso,
-  progressPercents,
+  progressBar,
   progressVersion,
   STATUS_LABEL,
 } from './collectionProgress.js';
@@ -87,10 +87,34 @@ function logoMarkup(logoDataUri, clubName) {
         fill="${COLORS.accent}" text-anchor="middle">${initial}</text>`;
 }
 
-function barMarkup(percents) {
+// Bumped when the card's drawing changes, so a running process never serves an
+// old layout from memory (spec 007 research R5).
+export const CARD_LAYOUT = '2';
+
+// The split bar keeps a positive share at least this wide (spec 007 FR-004).
+const MIN_SEGMENT_WIDTH = 4;
+
+/** Segment widths in px; `minWidth` only applies to the split bar. */
+function segmentWidths(percents, minWidth) {
+  const { width } = BAR;
+  let confirmedWidth = (width * percents.confirmedPct) / 100;
+  let pendingWidth = (width * percents.pendingPct) / 100;
+  if (minWidth > 0) {
+    if (pendingWidth > 0 && pendingWidth < minWidth) {
+      pendingWidth = minWidth;
+      confirmedWidth = Math.min(confirmedWidth, width - minWidth);
+    }
+    if (confirmedWidth > 0 && confirmedWidth < minWidth) {
+      confirmedWidth = minWidth;
+      pendingWidth = Math.min(pendingWidth, width - minWidth);
+    }
+  }
+  return { confirmedWidth, pendingWidth };
+}
+
+function barMarkup(percents, minWidth = 0) {
   const { x, y, width, height } = BAR;
-  const confirmedWidth = (width * percents.confirmedPct) / 100;
-  const pendingWidth = (width * percents.pendingPct) / 100;
+  const { confirmedWidth, pendingWidth } = segmentWidths(percents, minWidth);
   const pending =
     pendingWidth > 0
       ? `<rect id="bar-pending" x="${x + confirmedWidth}" y="${y}" width="${pendingWidth}" height="${height}" fill="${COLORS.accent}" fill-opacity="0.4"/>`
@@ -116,7 +140,8 @@ export function buildCardSvg({
   progress,
   targetAmount,
 }) {
-  const percents = progressPercents(progress, targetAmount);
+  const bar = progressBar(progress, targetAmount);
+  const percents = bar.mode === 'target' ? bar : null;
   // Pending first, then verified (spec 003 FR-003); the bar is unchanged.
   const amounts = [];
   if (progress.pendingTotal > 0)
@@ -128,8 +153,9 @@ export function buildCardSvg({
   );
   const amountsText = amounts.join(' · ');
 
-  // Without a bar the amounts move up into its place.
-  const amountsY = percents ? 500 : 420;
+  // Without a target the bar shows the verified vs pending split under a
+  // caption (spec 007); the amounts line stays below it either way.
+  const amountsY = 500;
   const goal = percents
     ? `<text x="${BAR.x}" y="${amountsY + 56}" font-family="${FONT}" font-size="32" fill="${COLORS.muted}">of ${esc(formatPeso(targetAmount))} target</text>`
     : '';
@@ -139,11 +165,27 @@ export function buildCardSvg({
   ${logoMarkup(logoDataUri, clubName)}
   <text x="280" y="150" font-family="${FONT}" font-size="56" font-weight="bold" fill="${COLORS.text}">${esc(truncate(collectionName))}</text>
   <text x="280" y="210" font-family="${FONT}" font-size="32" fill="${COLORS.muted}">${esc(truncate(clubName))}</text>
-  ${percents ? barMarkup(percents) : ''}
+  ${percents ? barMarkup(percents) : splitMarkup(bar)}
   <text x="${BAR.x}" y="${amountsY}" font-family="${FONT}" font-size="${fitFontSize(amountsText, BAR.width)}" font-weight="bold" fill="${COLORS.text}">${esc(amountsText)}</text>
   ${goal}
   <text x="${CARD_WIDTH - 80}" y="${CARD_HEIGHT - 40}" font-family="${FONT}" font-size="24" fill="${COLORS.muted}" text-anchor="end">Motoclub Connect</text>
 </svg>`;
+}
+
+/** Caption + split bar for a collection without a target (spec 007 D1–D3, R4). */
+function splitMarkup(split) {
+  return `<text x="${BAR.x}" y="${BAR.y - 20}" font-family="${FONT}" font-size="28" fill="${COLORS.muted}">Verified vs pending</text>${barMarkup(split, MIN_SEGMENT_WIDTH)}`;
+}
+
+/** In-memory cache key: the collection's version, the card layout, and the club's name and logo. */
+export function cardCacheKey({ collection, club, progress }) {
+  return [
+    collection._id,
+    progressVersion(progress, collection.updatedAt),
+    CARD_LAYOUT,
+    club?.clubName ?? '',
+    club?.logoUrl ?? '',
+  ].join(':');
 }
 
 async function loadLogo(club, fallbackLogoUrl) {
@@ -171,12 +213,7 @@ export async function renderCollectionCard({
   fallbackLogoUrl,
 }) {
   // The club's name and logo are drawn on the card, so they are part of the key.
-  const key = [
-    collection._id,
-    progressVersion(progress, collection.updatedAt),
-    club?.clubName ?? '',
-    club?.logoUrl ?? '',
-  ].join(':');
+  const key = cardCacheKey({ collection, club, progress });
   if (cache.has(key)) {
     const hit = cache.get(key);
     cache.delete(key);

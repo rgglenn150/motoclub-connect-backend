@@ -8,6 +8,8 @@ import {
   formatProgressText,
   progressVersion,
   STATUS_LABEL,
+  progressSplit,
+  progressBar,
 } from '../utils/collectionProgress.js';
 
 const A = new mongoose.Types.ObjectId('507f191e810c19729de860ea');
@@ -167,5 +169,55 @@ describe('utils/collectionProgress', () => {
         '0-0-0'
       );
     });
+  });
+});
+
+// Spec 007 research R2. COPY — keep identical to
+// motoclub-connect-ionic/src/app/components/collection-progress/collection-progress.component.spec.ts
+// [verified, pending, confirmedPct, pendingPct, confirmedShare, pendingShare]
+const SPLIT_CASES = [
+  [4500, 1200, 78.94736842105263, 21.052631578947366, '79%', '21%'],
+  [100, 0, 100, 0, '100%', '0%'],
+  [0, 0, 0, 0, null, null],
+  [0, 1200, 0, 100, '0%', '100%'],
+  [1, 2, 33.33333333333333, 66.66666666666667, '33%', '67%'],
+  [2, 1, 66.66666666666666, 33.33333333333334, '67%', '33%'],
+  [100000, 1, 99.99900000999989, 0.0009999900001063771, '99%', '<1%'],
+  [-50, 100, 0, 100, '0%', '100%'],
+  [1000.5, 0.5, 99.95004995004995, 0.04995004995005235, '99%', '<1%'],
+];
+
+describe('progressSplit (spec 007)', () => {
+  for (const [c, p, cPct, pPct, cShare, pShare] of SPLIT_CASES) {
+    it(`splits ${c} verified / ${p} pending`, () => {
+      const split = progressSplit({ confirmedTotal: c, pendingTotal: p });
+      expect(split.confirmedPct).to.be.closeTo(cPct, 1e-9);
+      expect(split.pendingPct).to.be.closeTo(pPct, 1e-9);
+      expect(split.confirmedShare).to.equal(cShare);
+      expect(split.pendingShare).to.equal(pShare);
+      expect(split.confirmedPct + split.pendingPct).to.be.at.most(100 + 1e-9);
+    });
+  }
+});
+
+describe('progressBar (spec 007)', () => {
+  it('measures toward a positive target exactly as progressPercents does', () => {
+    const progress = { confirmedTotal: 4500, pendingTotal: 1200 };
+    expect(progressBar(progress, 10000)).to.deep.equal({
+      mode: 'target',
+      ...progressPercents(progress, 10000),
+    });
+  });
+
+  for (const target of [undefined, null, 0, -5]) {
+    it(`splits collected money without a positive target (${target})`, () => {
+      const bar = progressBar({ confirmedTotal: 4500, pendingTotal: 1200 }, target);
+      expect(bar.mode).to.equal('split');
+      expect(bar.confirmedShare).to.equal('79%');
+    });
+  }
+
+  it('leaves progressPercents unchanged: null without a target', () => {
+    expect(progressPercents({ confirmedTotal: 1, pendingTotal: 1 })).to.equal(null);
   });
 });
