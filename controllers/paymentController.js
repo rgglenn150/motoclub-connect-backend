@@ -13,6 +13,10 @@ import {
   STATEMENT_ERRORS,
 } from '../utils/gcashStatement.js';
 import { matchPayments } from '../utils/statementMatch.js';
+import {
+  READER_IMAGE_TYPES,
+  sendReceiptError,
+} from '../utils/receiptErrors.js';
 
 export async function getPaymentsByCollection(req, res) {
   try {
@@ -294,18 +298,20 @@ export async function extractReceiptData(req, res) {
       console.error(
         'OPENROUTER_API_KEY is not set; receipt scanning is disabled'
       );
-      return res.status(503).json({
-        message:
-          'Receipt scanning is unavailable. Please fill in the fields manually.',
-      });
+      return sendReceiptError(res, 'READER_UNAVAILABLE');
+    }
+
+    if (!READER_IMAGE_TYPES.includes(req.file.mimetype)) {
+      console.warn('Receipt type the reader does not take:', req.file.mimetype);
+      return sendReceiptError(res, 'UNSUPPORTED_FORMAT');
     }
 
     const base64Image = req.file.buffer.toString('base64');
     const dataUrl = `data:${req.file.mimetype};base64,${base64Image}`;
 
-    const response = await fetch(
-      'https://openrouter.ai/api/v1/chat/completions',
-      {
+    let response;
+    try {
+      response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
@@ -326,16 +332,18 @@ export async function extractReceiptData(req, res) {
             },
           ],
         }),
-      }
-    );
+      });
+    } catch (err) {
+      console.error('OpenRouter unreachable:', err.message);
+      return sendReceiptError(res, 'READER_UNAVAILABLE');
+    }
 
     if (!response.ok) {
       const errBody = await response.json().catch(() => ({}));
       console.error('OpenRouter error:', response.status, errBody);
-      if (response.status === 429) {
-        return res.status(429).json({
-          message: 'AI quota exceeded. Please fill in the fields manually.',
-        });
+      // 400: the image itself was rejected (e.g. a format the model can't take).
+      if (response.status === 400) {
+        return sendReceiptError(res, 'UNSUPPORTED_FORMAT');
       }
       if (response.status === 404) {
         console.error(
@@ -347,9 +355,7 @@ export async function extractReceiptData(req, res) {
           'OpenRouter rejected the API key. Check OPENROUTER_API_KEY.'
         );
       }
-      return res.status(502).json({
-        message: 'Failed to read receipt. Please fill in the fields manually.',
-      });
+      return sendReceiptError(res, 'READER_UNAVAILABLE');
     }
 
     const data = await response.json();
@@ -363,22 +369,21 @@ export async function extractReceiptData(req, res) {
         .trim();
       parsed = JSON.parse(cleaned);
     } catch (_) {
-      parsed = {
-        name: null,
-        amount: null,
-        referenceNumber: null,
-        phoneNumber: null,
-        transactionDateTime: null,
-      };
+      return sendReceiptError(res, 'UNREADABLE');
     }
 
-    return res.status(200).json({
-      name: parsed.name ?? null,
-      amount: parseAmount(parsed.amount),
-      referenceNumber: parsed.referenceNumber ?? null,
-      phoneNumber: parsed.phoneNumber ?? null,
-      transactionDateTime: parsed.transactionDateTime ?? null,
-    });
+    const fields = {
+      name: parsed?.name ?? null,
+      amount: parseAmount(parsed?.amount),
+      referenceNumber: parsed?.referenceNumber ?? null,
+      phoneNumber: parsed?.phoneNumber ?? null,
+      transactionDateTime: parsed?.transactionDateTime ?? null,
+    };
+    // A partial read still helps; nothing at all is a failure (research R5).
+    if (Object.values(fields).every((v) => v === null)) {
+      return sendReceiptError(res, 'UNREADABLE');
+    }
+    return res.status(200).json(fields);
   } catch (err) {
     console.error('Error extracting receipt data:', err.message);
     return res.status(500).json({

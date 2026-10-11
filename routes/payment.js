@@ -9,15 +9,34 @@ import {
   checkStatement,
   bulkVerifyPayments,
 } from '../controllers/paymentController.js';
-import authMiddleware, { optionalAuthMiddleware } from '../middlewares/authMiddleware.js';
+import authMiddleware, {
+  optionalAuthMiddleware,
+} from '../middlewares/authMiddleware.js';
 import { STATEMENT_ERRORS } from '../utils/gcashStatement.js';
+import { sendReceiptError } from '../utils/receiptErrors.js';
 
 const router = express.Router();
 
-const upload = multer({
+// Receipts must be images; size and type errors are coded (spec 008 FR-006).
+const receiptUpload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 10 * 1024 * 1024 },
-});
+  limits: { fileSize: 10 * 1024 * 1024, files: 1 },
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype?.startsWith('image/')) return cb(null, true);
+    const err = new Error('Receipt is not an image');
+    err.code = 'UNSUPPORTED_FORMAT';
+    return cb(err);
+  },
+}).single('receipt');
+
+function receiveReceipt(req, res, next) {
+  receiptUpload(req, res, (err) => {
+    if (!err) return next();
+    if (err.code === 'LIMIT_FILE_SIZE')
+      return sendReceiptError(res, 'FILE_TOO_LARGE');
+    return sendReceiptError(res, 'UNSUPPORTED_FORMAT');
+  });
+}
 
 // GCash statements are read in memory and never stored (spec 004 FR-003, FR-013).
 const statementUpload = multer({
@@ -34,12 +53,30 @@ function receiveStatement(req, res, next) {
   });
 }
 
-router.get('/collection/:collectionId', optionalAuthMiddleware, getPaymentsByCollection);
-router.post('/create', optionalAuthMiddleware, upload.single('receipt'), createPayment);
+router.get(
+  '/collection/:collectionId',
+  optionalAuthMiddleware,
+  getPaymentsByCollection
+);
+router.post('/create', optionalAuthMiddleware, receiveReceipt, createPayment);
 router.patch('/:paymentId/status', authMiddleware, updatePaymentStatus);
 router.delete('/:paymentId', authMiddleware, deletePayment);
-router.post('/collection/:collectionId/statement-check', authMiddleware, receiveStatement, checkStatement);
-router.post('/collection/:collectionId/bulk-verify', authMiddleware, bulkVerifyPayments);
-router.post('/extract-receipt', optionalAuthMiddleware, upload.single('receipt'), extractReceiptData);
+router.post(
+  '/collection/:collectionId/statement-check',
+  authMiddleware,
+  receiveStatement,
+  checkStatement
+);
+router.post(
+  '/collection/:collectionId/bulk-verify',
+  authMiddleware,
+  bulkVerifyPayments
+);
+router.post(
+  '/extract-receipt',
+  optionalAuthMiddleware,
+  receiveReceipt,
+  extractReceiptData
+);
 
 export default router;
