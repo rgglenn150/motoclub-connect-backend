@@ -84,6 +84,22 @@ describe('POST /api/payment/extract-receipt', () => {
     expect(fetch.called).to.equal(false);
   });
 
+  it('answers a plain 400 for a malformed upload, not UNSUPPORTED_FORMAT', async () => {
+    const fetch = sinon.stub(globalThis, 'fetch');
+
+    const res = await request(app)
+      .post('/api/payment/extract-receipt')
+      .attach('photo', JPEG, {
+        filename: 'receipt.jpg',
+        contentType: 'image/jpeg',
+      });
+
+    expect(res.status).to.equal(400);
+    expect(res.body.code).to.equal(undefined);
+    expect(res.body.message).to.be.a('string');
+    expect(fetch.called).to.equal(false);
+  });
+
   it('answers UNSUPPORTED_FORMAT for an image type the reader does not take', async () => {
     const fetch = sinon.stub(globalThis, 'fetch');
 

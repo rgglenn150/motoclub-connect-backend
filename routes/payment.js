@@ -34,7 +34,12 @@ function receiveReceipt(req, res, next) {
     if (!err) return next();
     if (err.code === 'LIMIT_FILE_SIZE')
       return sendReceiptError(res, 'FILE_TOO_LARGE');
-    return sendReceiptError(res, 'UNSUPPORTED_FORMAT');
+    if (err.code === 'UNSUPPORTED_FORMAT')
+      return sendReceiptError(res, 'UNSUPPORTED_FORMAT');
+    // Extra files, a wrong field name or a broken body: not the photo's fault.
+    return res.status(400).json({
+      message: "Couldn't upload this receipt. Please try again.",
+    });
   });
 }
 
