@@ -37,6 +37,7 @@ function receiveReceipt(req, res, next) {
     if (err.code === 'UNSUPPORTED_FORMAT')
       return sendReceiptError(res, 'UNSUPPORTED_FORMAT');
     // Extra files, a wrong field name or a broken body: not the photo's fault.
+    console.warn('Malformed receipt upload:', err.code, err.message);
     return res.status(400).json({
       message: "Couldn't upload this receipt. Please try again.",
     });
