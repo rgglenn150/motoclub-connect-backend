@@ -16,7 +16,10 @@ const notificationSchema = new Schema(
         'request_rejected',
         'new_member',
         'role_change',
-        'event_join'
+        'event_join',
+        // Spec 009: to a member who received collected funds.
+        'remittance_recorded',
+        'remittance_voided'
       ],
     },
     recipient: {
