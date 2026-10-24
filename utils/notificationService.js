@@ -1,6 +1,7 @@
 import Notification from '../models/NotificationModel.js';
 import User from '../models/UserModel.js';
 import Member from '../models/MemberModel.js';
+import { formatPeso } from './collectionProgress.js';
 
 /**
  * Message templates for different notification types
@@ -11,6 +12,10 @@ const messageTemplates = {
   request_rejected: (clubName, rejecterName) => `Your request to join ${clubName} was rejected by ${rejecterName}`,
   new_member: (memberName, clubName) => `${memberName} joined ${clubName}`,
   role_change: (clubName) => `You are now an admin of ${clubName}`,
+  remittance_recorded: (amount, collectionName) =>
+    `${formatPeso(amount)} from ${collectionName} was remitted to you.`,
+  remittance_voided: (amount, collectionName) =>
+    `The ${formatPeso(amount)} remittance to you from ${collectionName} was voided.`,
 };
 
 /**
@@ -204,6 +209,37 @@ export async function createRoleChangeNotification(userId, club, newRole, change
     console.error('Error creating role change notification:', error);
     throw new Error(`Failed to create role change notification: ${error.message}`);
   }
+}
+
+/**
+ * Tell a member recipient about a remittance to them (spec 009 D8, FR-015).
+ * External recipients have no account, so they are never notified.
+ * @param {'remittance_recorded'|'remittance_voided'} type
+ * @param {Object} remittance - Remittance document (member recipient)
+ * @param {Object} collection - Collection document
+ * @param {String} senderId - Admin who recorded or voided it
+ */
+async function createRemittanceNotification(type, remittance, collection, senderId) {
+  if (!remittance.recipientUser) return null;
+  return Notification.createNotification({
+    type,
+    recipient: remittance.recipientUser,
+    sender: senderId,
+    club: remittance.club,
+    message: messageTemplates[type](remittance.amount, collection.name),
+    data: {
+      collectionId: String(collection._id),
+      remittanceId: String(remittance._id),
+    },
+  });
+}
+
+export function createRemittanceRecordedNotification(remittance, collection, senderId) {
+  return createRemittanceNotification('remittance_recorded', remittance, collection, senderId);
+}
+
+export function createRemittanceVoidedNotification(remittance, collection, senderId) {
+  return createRemittanceNotification('remittance_voided', remittance, collection, senderId);
 }
 
 /**

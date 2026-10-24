@@ -12,37 +12,15 @@ import {
 import authMiddleware, {
   optionalAuthMiddleware,
 } from '../middlewares/authMiddleware.js';
+import { imageUpload } from '../middlewares/upload.js';
 import { STATEMENT_ERRORS } from '../utils/gcashStatement.js';
-import { sendReceiptError } from '../utils/receiptErrors.js';
 
 const router = express.Router();
 
 // Receipts must be images; size and type errors are coded (spec 008 FR-006).
-const receiptUpload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: 10 * 1024 * 1024, files: 1 },
-  fileFilter: (req, file, cb) => {
-    if (file.mimetype?.startsWith('image/')) return cb(null, true);
-    const err = new Error('Receipt is not an image');
-    err.code = 'UNSUPPORTED_FORMAT';
-    return cb(err);
-  },
-}).single('receipt');
-
-function receiveReceipt(req, res, next) {
-  receiptUpload(req, res, (err) => {
-    if (!err) return next();
-    if (err.code === 'LIMIT_FILE_SIZE')
-      return sendReceiptError(res, 'FILE_TOO_LARGE');
-    if (err.code === 'UNSUPPORTED_FORMAT')
-      return sendReceiptError(res, 'UNSUPPORTED_FORMAT');
-    // Extra files, a wrong field name or a broken body: not the photo's fault.
-    console.warn('Malformed receipt upload:', err.code, err.message);
-    return res.status(400).json({
-      message: "Couldn't upload this receipt. Please try again.",
-    });
-  });
-}
+const receiveReceipt = imageUpload('receipt', {
+  malformedMessage: "Couldn't upload this receipt. Please try again.",
+});
 
 // GCash statements are read in memory and never stored (spec 004 FR-003, FR-013).
 const statementUpload = multer({

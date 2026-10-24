@@ -10,6 +10,7 @@ import notificationRoutes from './routes/notification.js';
 import officialMemberRouter from './routes/official-member.js';
 import paymentRoutes from './routes/payment.js';
 import collectionRoutes from './routes/collection.js';
+import remittanceRoutes from './routes/remittance.js';
 import shareRoutes from './routes/share.js';
 import cors from 'cors';
 
@@ -111,6 +112,7 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/official-member', officialMemberRouter);
 app.use('/api/payment', paymentRoutes);
 app.use('/api/collection', collectionRoutes);
+app.use('/api/remittance', remittanceRoutes);
 // Server-rendered link previews (Open Graph) for social scrapers.
 app.use('/share', shareRoutes);
 app.get('/api/wakeup', (req, res) => {
