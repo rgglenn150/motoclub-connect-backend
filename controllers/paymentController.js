@@ -3,7 +3,9 @@ import Payment from '../models/PaymentModel.js';
 import Collection from '../models/CollectionModel.js';
 import Member from '../models/MemberModel.js';
 import cloudinary from '../utils/cloudinary.js';
-import { STATUS_LABEL } from '../utils/collectionProgress.js';
+import { STATUS_LABEL, formatPeso } from '../utils/collectionProgress.js';
+import { getLedger, shortfallIfRemoved } from '../utils/remittanceLedger.js';
+import { withCollectionLock, LedgerBusyError } from '../utils/collectionLock.js';
 import { serializePayment } from '../utils/paymentView.js';
 import { isValidAmount } from '../utils/amount.js';
 import {
@@ -253,6 +255,33 @@ export async function deletePayment(req, res) {
         .json({ message: 'Only club admins can delete payments' });
     }
 
+    // Deleting verified money must not leave more remitted than verified
+    // (spec 009 D5), so it is checked and done under the collection's lock.
+    if (payment.status === 'confirmed') {
+      const shortfall = await withCollectionLock(
+        payment.collection,
+        async ({ confirmLease }) => {
+          const missing = shortfallIfRemoved(
+            payment.amount,
+            await getLedger(payment.collection)
+          );
+          if (missing > 0) return missing;
+          await confirmLease();
+          await payment.deleteOne();
+          return 0;
+        }
+      );
+      if (shortfall > 0) {
+        return res.status(409).json({
+          code: 'REMITTED_EXCEEDS_VERIFIED',
+          message: `${formatPeso(shortfall)} of this payment has already been remitted. Void a remittance first.`,
+          shortfall,
+        });
+      }
+    } else {
+      await payment.deleteOne();
+    }
+
     if (payment.receiptPublicId) {
       try {
         await cloudinary.uploader.destroy(payment.receiptPublicId);
@@ -261,10 +290,11 @@ export async function deletePayment(req, res) {
       }
     }
 
-    await payment.deleteOne();
-
     return res.status(200).json({ message: 'Payment deleted' });
   } catch (err) {
+    if (err instanceof LedgerBusyError) {
+      return res.status(409).json({ code: err.code, message: err.message });
+    }
     console.error('Error deleting payment:', err.message);
     return res
       .status(500)

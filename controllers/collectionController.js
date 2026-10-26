@@ -3,9 +3,11 @@ import Collection from '../models/CollectionModel.js';
 import Payment from '../models/PaymentModel.js';
 import Member from '../models/MemberModel.js';
 import Club from '../models/ClubModel.js';
+import Remittance from '../models/RemittanceModel.js';
 import cloudinary from '../utils/cloudinary.js';
 import { getProgressByCollection } from '../utils/collectionProgress.js';
 import { isValidAmount } from '../utils/amount.js';
+import { withCollectionLock, LedgerBusyError } from '../utils/collectionLock.js';
 
 async function isClubAdmin(clubId, userId) {
   const membership = await Member.findOne({ club: clubId, user: userId, roles: 'admin' });
@@ -188,24 +190,53 @@ export async function deleteCollection(req, res) {
       return res.status(403).json({ message: 'Only club admins can delete collections' });
     }
 
-    // Cascade: delete all payments and their Cloudinary receipts
-    const payments = await Payment.find({ collection: collectionId });
+    // Active remittances are the record of money handed over: they must be
+    // voided first (spec 009 D9). Checked under the lock so none can be added
+    // while the collection is being deleted.
+    const deleted = await withCollectionLock(
+      collection._id,
+      async ({ confirmLease }) => {
+        if (await Remittance.exists({ collection: collection._id, status: 'active' })) {
+          return null;
+        }
+        await confirmLease();
+        const [payments, remittances] = await Promise.all([
+          Payment.find({ collection: collectionId }),
+          Remittance.find({ collection: collection._id }),
+        ]);
+        await Payment.deleteMany({ collection: collectionId });
+        await Remittance.deleteMany({ collection: collection._id });
+        await collection.deleteOne();
+        return { payments, remittances };
+      }
+    );
+    if (!deleted) {
+      return res.status(409).json({
+        code: 'ACTIVE_REMITTANCES',
+        message: 'This collection has remittances. Void them before deleting it.',
+      });
+    }
+
+    // Cascade: remove payment receipts and remittance proofs from Cloudinary
+    const photoIds = [
+      ...deleted.payments.map((p) => p.receiptPublicId),
+      ...deleted.remittances.map((r) => r.proofPublicId),
+    ].filter(Boolean);
     await Promise.all(
-      payments.map(async (p) => {
-        if (p.receiptPublicId) {
-          try {
-            await cloudinary.uploader.destroy(p.receiptPublicId);
-          } catch (e) {
-            console.warn('Failed to delete receipt from Cloudinary:', e);
-          }
+      photoIds.map(async (publicId) => {
+        try {
+          await cloudinary.uploader.destroy(publicId);
+        } catch (e) {
+          console.warn('Failed to delete photo from Cloudinary:', e);
         }
       })
     );
-    await Payment.deleteMany({ collection: collectionId });
-    await collection.deleteOne();
 
     return res.status(200).json({ message: 'Collection deleted' });
   } catch (err) {
+    if (err instanceof LedgerBusyError) {
+      return res.status(409).json({ code: err.code, message: err.message });
+    }
     console.error('Error deleting collection:', err.message);
     return res.status(500).json({ message: 'Server Error', error: err.message });
   }
