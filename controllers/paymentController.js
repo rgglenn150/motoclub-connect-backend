@@ -510,13 +510,15 @@ export async function checkStatement(req, res) {
     logOutcome(
       'OK',
       `pages=${pages} entries=${statement.entries.length} checked=${summary.checked} ` +
-        `matched=${summary.matched} mismatched=${summary.mismatched} notFound=${summary.notFound}`
+        `matched=${summary.matched} mismatched=${summary.mismatched} notFound=${summary.notFound}` +
+        (statement.reconciled ? '' : ' reconciled=false')
     );
     return res.status(200).json({
       statement: {
         from: statement.from,
         to: statement.to,
         entryCount: statement.entries.length,
+        reconciled: statement.reconciled,
       },
       summary,
       results,
