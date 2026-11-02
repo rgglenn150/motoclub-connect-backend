@@ -118,10 +118,16 @@ export async function readStatementLines(
 const PERIOD = /^(\d{4}-\d{2}-\d{2}) to (\d{4}-\d{2}-\d{2})$/;
 const STARTING = /^STARTING BALANCE ([\d,]+\.\d{2})$/;
 const ENDING = /^ENDING BALANCE ([\d,]+\.\d{2})$/;
-// Date, anything (a description may share the line), 13-digit reference,
-// amount, balance. Wrapped description lines don't match and are skipped.
+// Date, description, 13-digit reference, amount, balance. The description may
+// be empty: long descriptions wrap onto their own line above the row.
 const ROW =
-  /^(\d{4}-\d{2}-\d{2}) (\d{1,2}):(\d{2}) ([AP]M)\b.*?\b(\d{13}) ([\d,]+\.\d{2}) ([\d,]+\.\d{2})$/;
+  /^(\d{4}-\d{2}-\d{2}) (\d{1,2}):(\d{2}) ([AP]M)\b(.*?)\b(\d{13}) ([\d,]+\.\d{2}) ([\d,]+\.\d{2})$/;
+
+/** Rows the printed balances fail to classify fall back to their description. */
+const RECEIVED_HINT = /\breceived\b|cash[\s-]?in\b/i;
+const SENT_HINT = /\bsent\b|cash[\s-]?out\b/i;
+// Page furniture that would otherwise look like a wrapped description.
+const NON_DESCRIPTION = /^(date and time|gcash transaction history|total (debit|credit))/i;
 
 /** '12,345.67' → 1234567 (integer centavos; no float drift). */
 function centavos(text) {
@@ -138,8 +144,12 @@ function manilaIso(date, hour, minute, meridiem) {
 
 /**
  * Text lines (in printed order) → statement. The running balance decides
- * received vs sent and must reconcile from STARTING to ENDING BALANCE, or the
- * statement is refused rather than risk a wrong match (FR-004, FR-015).
+ * received vs sent wherever it reconciles. Statements whose printed rows do
+ * not bridge STARTING to ENDING BALANCE (GCash exports omit some transaction
+ * types) are returned anyway, flagged reconciled:false, so reference-number
+ * matching can proceed. Ambiguous rows are direction 'unknown' and can never
+ * match as received — the conservative side of FR-004 is kept at the match
+ * step, not by refusing the whole statement.
  * @param {string[]} lines
  */
 export function parseStatementLines(lines) {
@@ -148,6 +158,7 @@ export function parseStatementLines(lines) {
   let startingBalance;
   let endingBalance;
   const rows = [];
+  let pendingDescription = '';
 
   for (const raw of lines) {
     const line = raw.trim();
@@ -159,41 +170,64 @@ export function parseStatementLines(lines) {
     } else if ((m = line.match(ENDING))) {
       endingBalance = centavos(m[1]);
     } else if ((m = line.match(ROW))) {
-      const [, date, hour, minute, meridiem, reference, amount, balance] = m;
+      const [, date, hour, minute, meridiem, description, reference, amount, balance] = m;
       rows.push({
         dateTime: manilaIso(date, hour, minute, meridiem),
         date,
         reference,
         amount: centavos(amount),
         balance: centavos(balance),
+        description: `${pendingDescription} ${description}`.trim(),
       });
+      pendingDescription = '';
+    } else if (!NON_DESCRIPTION.test(line) && /[a-z]/i.test(line)) {
+      // A description too long for its row prints on its own line above it.
+      pendingDescription = pendingDescription
+        ? `${pendingDescription} ${line}`
+        : line;
     }
   }
 
-  if (!from || startingBalance === undefined || rows.length === 0) {
+  if (!from || rows.length === 0) {
     throw new StatementError('NO_TRANSACTIONS');
   }
 
   let previous = startingBalance;
+  let breaks = 0;
   const entries = rows.map((row) => {
     let direction;
-    if (row.amount > 0 && previous + row.amount === row.balance) {
+    if (previous !== undefined && row.amount > 0 && previous + row.amount === row.balance) {
       direction = 'received';
-    } else if (previous - row.amount === row.balance) {
+    } else if (previous !== undefined && previous - row.amount === row.balance) {
       direction = 'sent';
     } else {
-      throw new StatementError('UNRELIABLE');
+      breaks += 1;
+      direction = RECEIVED_HINT.test(row.description)
+        ? 'received'
+        : SENT_HINT.test(row.description)
+          ? 'sent'
+          : 'unknown';
     }
     previous = row.balance;
-    return { ...row, direction };
+    return {
+      dateTime: row.dateTime,
+      date: row.date,
+      reference: row.reference,
+      amount: row.amount,
+      balance: row.balance,
+      direction,
+    };
   });
 
-  if (endingBalance === undefined || previous !== endingBalance) {
-    throw new StatementError('UNRELIABLE');
-  }
+  const reconciled =
+    startingBalance !== undefined &&
+    breaks === 0 &&
+    endingBalance !== undefined &&
+    previous === endingBalance;
+
   if (!entries.some((e) => e.direction === 'received')) {
     throw new StatementError('NO_CREDITS');
   }
 
-  return { from, to, startingBalance, endingBalance, entries };
+  return { from, to, startingBalance, endingBalance, entries, reconciled, breaks };
 }

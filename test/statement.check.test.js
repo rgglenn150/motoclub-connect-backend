@@ -96,6 +96,7 @@ describe('POST /api/payment/collection/:collectionId/statement-check', () => {
       from: '2026-09-27',
       to: '2026-10-03',
       entryCount: 11,
+      reconciled: true,
     });
     expect(res.body.summary).to.deep.equal({
       checked: 6,
