@@ -7,7 +7,9 @@ import {
 } from '../utils/gcashStatement.js';
 
 // Spec 004, research R4/R5: GCash statement text lines → transactions.
-// The running balance decides received vs sent and proves the read.
+// The running balance decides received vs sent wherever it reconciles;
+// statements with balance gaps (GCash exports omit some transaction types)
+// still parse, flagged reconciled:false, instead of being refused.
 const HEADER = [
   'GCash Transaction History',
   '2026-09-27 to 2026-10-03',
@@ -52,6 +54,8 @@ describe('utils/gcashStatement parseStatementLines', () => {
     expect(parsed.to).to.equal('2026-10-03');
     expect(parsed.startingBalance).to.equal(1000000);
     expect(parsed.endingBalance).to.equal(1035000);
+    expect(parsed.reconciled).to.equal(true);
+    expect(parsed.breaks).to.equal(0);
     expect(parsed.entries).to.deep.equal([
       {
         dateTime: '2026-09-27T09:00:00+08:00',
@@ -72,7 +76,7 @@ describe('utils/gcashStatement parseStatementLines', () => {
     ]);
   });
 
-  it('skips wrapped description lines above and below a row', () => {
+  it('attaches wrapped description lines above and below a row', () => {
     const parsed = parseStatementLines(
       statement(
         [
@@ -130,11 +134,21 @@ describe('utils/gcashStatement parseStatementLines', () => {
     expectCode(() => parseStatementLines(lines), 'NO_TRANSACTIONS');
   });
 
-  it('refuses NO_TRANSACTIONS without a starting balance', () => {
-    const lines = statement(['2026-10-01 10:00 AM Transfer 9000000000001 5.00 10005.00'], {
-      end: '10005.00',
-    }).filter((l) => !l.startsWith('STARTING'));
-    expectCode(() => parseStatementLines(lines), 'NO_TRANSACTIONS');
+  it('parses a missing starting balance as unreconciled, classifying the first row by description', () => {
+    const lines = statement(
+      [
+        '2026-10-01 10:00 AM Transfer 9000000000001 5.00 10005.00',
+        '2026-10-01 11:00 AM Transfer 9000000000002 100.00 10105.00',
+      ],
+      { end: '10105.00' }
+    ).filter((l) => !l.startsWith('STARTING'));
+
+    const parsed = parseStatementLines(lines);
+    expect(parsed.startingBalance).to.equal(undefined);
+    expect(parsed.reconciled).to.equal(false);
+    expect(parsed.breaks).to.equal(1);
+    expect(parsed.entries[0].direction).to.equal('unknown');
+    expect(parsed.entries[1].direction).to.equal('received');
   });
 
   it('refuses NO_TRANSACTIONS when no row is found', () => {
@@ -154,43 +168,78 @@ describe('utils/gcashStatement parseStatementLines', () => {
     );
   });
 
-  it('refuses UNRELIABLE when a balance does not follow from the previous one', () => {
-    expectCode(
-      () =>
-        parseStatementLines(
-          statement(
-            [
-              '2026-10-01 09:00 AM Transfer 9000000000001 500.00 10500.00',
-              // A skipped row would leave this gap: 10500 ± 100 ≠ 10900.
-              '2026-10-01 10:00 AM Transfer 9000000000002 100.00 10900.00',
-            ],
-            { end: '10900.00' }
-          )
-        ),
-      'UNRELIABLE'
+  it('keeps matching when a balance does not follow from the previous one', () => {
+    // A skipped row leaves a gap: 9500 ± 100 ≠ 10900.
+    const parsed = parseStatementLines(
+      statement(
+        [
+          '2026-10-01 09:00 AM Transfer 9000000000001 500.00 9500.00',
+          '2026-10-01 10:00 AM Transfer 9000000000002 100.00 10900.00',
+          '2026-10-01 11:00 AM Transfer 9000000000003 200.00 11100.00',
+        ],
+        { end: '11100.00' }
+      )
     );
+
+    expect(parsed.reconciled).to.equal(false);
+    expect(parsed.breaks).to.equal(1);
+    expect(parsed.entries.map((e) => e.direction)).to.deep.equal([
+      'sent',
+      'unknown',
+      'received',
+    ]);
+    // The ambiguous row can never match as received.
+    expect(parsed.entries[1].direction).to.not.equal('received');
   });
 
-  it('refuses UNRELIABLE when the last balance is not the ending balance', () => {
-    expectCode(
-      () =>
-        parseStatementLines(
-          statement(['2026-10-01 09:00 AM Transfer 9000000000001 500.00 10500.00'], {
-            end: '10600.00',
-          })
-        ),
-      'UNRELIABLE'
+  it('classifies a balance-gap row as received via its wrapped description', () => {
+    const parsed = parseStatementLines(
+      statement(
+        [
+          'Received GCash from Sample Bank, Inc. with account ending in 0000 and',
+          '2026-10-01 11:20 AM 9000000000004 12,345.67 22,346.67',
+        ],
+        { end: '22,346.67' }
+      )
     );
+
+    expect(parsed.breaks).to.equal(1);
+    expect(parsed.reconciled).to.equal(false);
+    expect(parsed.entries[0]).to.include({
+      reference: '9000000000004',
+      direction: 'received',
+    });
   });
 
-  it('refuses UNRELIABLE when the ending balance is missing', () => {
-    expectCode(
-      () =>
-        parseStatementLines(
-          statement(['2026-10-01 09:00 AM Transfer 9000000000001 500.00 10500.00'], { end: null })
-        ),
-      'UNRELIABLE'
+  it('flags unreconciled when the last balance is not the ending balance', () => {
+    const parsed = parseStatementLines(
+      statement(
+        [
+          '2026-10-01 09:00 AM Transfer 9000000000001 500.00 9500.00',
+          '2026-10-01 10:00 AM Transfer 9000000000002 100.00 9600.00',
+        ],
+        { end: '10700.00' }
+      )
     );
+
+    expect(parsed.reconciled).to.equal(false);
+    expect(parsed.breaks).to.equal(0);
+    expect(parsed.entries.map((e) => e.direction)).to.deep.equal(['sent', 'received']);
+  });
+
+  it('flags unreconciled when the ending balance is missing', () => {
+    const parsed = parseStatementLines(
+      statement(
+        [
+          '2026-10-01 09:00 AM Transfer 9000000000001 500.00 10500.00',
+          '2026-10-01 10:00 AM Transfer 9000000000002 100.00 10600.00',
+        ],
+        { end: null }
+      )
+    );
+
+    expect(parsed.reconciled).to.equal(false);
+    expect(parsed.entries).to.have.length(2);
   });
 
   it('parses a 1,000-entry statement well under 10 seconds (SC-004)', () => {
@@ -207,6 +256,7 @@ describe('utils/gcashStatement parseStatementLines', () => {
     const started = Date.now();
     const parsed = parseStatementLines(statement(rows, { end: (balance / 100).toFixed(2) }));
     expect(parsed.entries).to.have.length(1000);
+    expect(parsed.reconciled).to.equal(true);
     expect(Date.now() - started).to.be.below(10000);
   });
 });
