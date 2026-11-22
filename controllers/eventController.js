@@ -1,9 +1,11 @@
+import mongoose from 'mongoose';
 import Event from '../models/EventModel.js';
 import Member from '../models/MemberModel.js';
 import Notification from '../models/NotificationModel.js';
 import { validationResult } from 'express-validator';
 import cloudinary from '../utils/cloudinary.js';
 import sharp from 'sharp';
+import { parseEventFilter, eventTimeFilter } from '../utils/eventTimeFilter.js';
 
 function getUserDisplayName(user) {
   if (!user) return 'Unknown User';
@@ -113,12 +115,33 @@ export async function getAllEvents(req, res) {
   }
 }
 
+/**
+ * GET /api/event/club/:clubId?filter=upcoming|past|all (spec 010).
+ * Upcoming by default; a plain array, no paging. Private events only for
+ * members of the club.
+ */
 export async function getEventsByClub(req, res) {
   try {
-    const events = await Event.find({ club: req.params.clubId }).populate(
-      'createdBy',
-      'username'
-    );
+    const { clubId } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(clubId)) {
+      return res.status(400).json({ message: 'Invalid club id' });
+    }
+
+    const filter = parseEventFilter(req.query.filter);
+    const { match, sort } = eventTimeFilter(filter);
+
+    // Members (any role) see every club event; everyone else only Public ones.
+    // `isPrivate: false` also hides events saved before the field existed.
+    // Platform admin gets no shortcut (constitution VI).
+    const conditions = [{ club: clubId }, match];
+    const membership = await Member.exists({ club: clubId, user: req.user._id });
+    if (!membership) {
+      conditions.push({ isPrivate: false });
+    }
+
+    const events = await Event.find({ $and: conditions })
+      .populate('createdBy', 'username')
+      .sort(sort);
     res.status(200).json(events);
   } catch (err) {
     console.error(err.message);
@@ -144,9 +167,8 @@ export async function getMyClubEvents(req, res) {
     if (isNaN(limit) || limit < 1) limit = 20;
     if (limit > 50) limit = 50;
 
-    // Parse filter
-    const allowedFilters = ['upcoming', 'past', 'all'];
-    const filter = allowedFilters.includes(req.query.filter) ? req.query.filter : 'upcoming';
+    // Parse filter (missing / unknown → upcoming, spec 010)
+    const filter = parseEventFilter(req.query.filter);
 
     // Parse search query
     const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
@@ -168,32 +190,20 @@ export async function getMyClubEvents(req, res) {
     // Extract club IDs from memberships
     const clubIds = memberships.map((membership) => membership.club);
 
-    // Build base query
-    const filterQuery = {
-      club: { $in: clubIds },
-    };
-
-    // Apply time-based filter
-    const now = new Date();
-    let sortOrder = { startTime: 1 };
-    if (filter === 'upcoming') {
-      filterQuery.startTime = { $gte: now };
-      sortOrder = { startTime: 1 };
-    } else if (filter === 'past') {
-      filterQuery.startTime = { $lt: now };
-      sortOrder = { startTime: -1 };
-    }
+    // Club and time filter (upcoming until it ends, spec 010), combined with
+    // $and so the time rule's $or can't clash with the search $or (R2)
+    const { match, sort: sortOrder } = eventTimeFilter(filter);
+    const conditions = [{ club: { $in: clubIds } }, match];
 
     // Apply search query (escaped to prevent ReDoS / regex injection)
     if (q.length > 0) {
       const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       const regex = new RegExp(escaped, 'i');
-      filterQuery.$or = [
-        { name: regex },
-        { description: regex },
-        { location: regex },
-      ];
+      conditions.push({
+        $or: [{ name: regex }, { description: regex }, { location: regex }],
+      });
     }
+    const filterQuery = { $and: conditions };
 
     const skip = (page - 1) * limit;
 
@@ -284,34 +294,22 @@ export async function getGlobalEvents(req, res) {
     if (isNaN(limit) || limit < 1) limit = 20;
     if (limit > 50) limit = 50;
 
-    const allowedFilters = ['upcoming', 'past', 'all'];
-    const filter = allowedFilters.includes(req.query.filter)
-      ? req.query.filter
-      : 'upcoming';
+    const filter = parseEventFilter(req.query.filter);
 
     const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
 
-    const filterQuery = { scope: 'global' };
-
-    const now = new Date();
-    let sortOrder = { startTime: 1 };
-    if (filter === 'upcoming') {
-      filterQuery.startTime = { $gte: now };
-      sortOrder = { startTime: 1 };
-    } else if (filter === 'past') {
-      filterQuery.startTime = { $lt: now };
-      sortOrder = { startTime: -1 };
-    }
+    // Upcoming until it ends (spec 010); $and keeps search and time apart (R2)
+    const { match, sort: sortOrder } = eventTimeFilter(filter);
+    const conditions = [{ scope: 'global' }, match];
 
     if (q.length > 0) {
       const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       const regex = new RegExp(escaped, 'i');
-      filterQuery.$or = [
-        { name: regex },
-        { description: regex },
-        { location: regex },
-      ];
+      conditions.push({
+        $or: [{ name: regex }, { description: regex }, { location: regex }],
+      });
     }
+    const filterQuery = { $and: conditions };
 
     const skip = (page - 1) * limit;
 
