@@ -1,4 +1,6 @@
 import User from '../models/UserModel.js';
+import Member from '../models/MemberModel.js';
+import Event from '../models/EventModel.js';
 import cloudinary from '../utils/cloudinary.js';
 import sharp from 'sharp';
 import bcrypt from 'bcrypt';
@@ -66,6 +68,22 @@ export const getCurrentUser = async (req, res) => {
       return res.status(404).json({ message: 'User not found' });
     }
     res.status(200).json(user);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// Aggregate stats for the Me page (rides attended, clubs joined)
+export const getUserStats = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const [clubs, rides] = await Promise.all([
+      Member.countDocuments({ user: userId }),
+      Event.countDocuments({ eventType: 'ride', attendees: userId }),
+    ]);
+    // kmRidden has no data source yet (no ride distance tracking in the app),
+    // so it is returned as null until a ride-logging feature exists.
+    res.status(200).json({ rides, kmRidden: null, clubs });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
