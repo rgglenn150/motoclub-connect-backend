@@ -2,6 +2,7 @@ import express from 'express';
 import {
   getUser,
   getCurrentUser,
+  getUserStats,
   updateProfile,
   updateUsername,
   updateEmail,
@@ -23,6 +24,9 @@ router.get('/', authMiddleware, getUser);
 
 // Get current authenticated user's profile
 router.get('/me', authMiddleware, getCurrentUser);
+
+// Get current authenticated user's aggregate stats (rides, km ridden, clubs)
+router.get('/me/stats', authMiddleware, getUserStats);
 
 // Update non-sensitive profile fields
 router.put('/me/profile', authMiddleware, updateProfile);
